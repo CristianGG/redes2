@@ -1,0 +1,16 @@
+CC = gcc
+CFLAGS= -Wall -Wextra -std=c89 -pedantic-errors -g -O0 -D_BSD_SOURCE -D_POSIX_SOURCE=200112L -lpthread
+PRGS = test1
+OBJS = 
+LIBS = 
+
+all: clean $(PRGS)
+
+%.o: %.c $(HEADERS)
+	$(CC) $(CFLAGS) -c $*.c $(INCLUDE) -o $@
+$(PRGS): $(OBJS)
+$(PRGS): % : %.o
+	$(CC) $(CFLAGS) -o $@ $< $(OBJS) $(LDFLAGS) $(LIBS)
+
+clean:
+	-rm -f *.o  *~ $(PRGS)
