@@ -44,6 +44,11 @@ struct inicio {
     unsigned int debug:1;
 } estado;
 
+struct palabra {
+    int cantidad;
+    char** nombre;
+} palabra;
+
 int serverConnected;
 
 /**
@@ -227,6 +232,10 @@ int main(int argc, char *argv[]){
 		c_connect(&serverConnected, estado.servername, estado.port);
 		printf("Server:%s \n", estado.servername);
 		printf("Port: %u \n", estado.port);
+		if(estado.nick){
+			c_auth(estado.nickname);
+			printf("Nick: %s \n", estado.nickname);
+		}
 		if(estado.channel){
 			c_connectChannel();
 			printf("Canal: %s \n", estado.channelname);

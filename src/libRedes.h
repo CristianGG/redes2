@@ -9,11 +9,6 @@
 #ifndef LIBREDES_H_
 #define LIBREDES_H_
 
-struct palabra {
-    int cantidad;
-    char** nombre;
-} palabra;
-
 void c_help();
 
 void c_connect(int* serverConnected, char* servername, int port);
@@ -42,6 +37,10 @@ void c_sleep(char* cadena);
 
 void connectChannel();
 
+char* concatenar(char* mensaje, char* mensaje2, char* mensaje3, char* mensaje4);
+
 char* obtenerIpServer(char* server);
+
+void enviar();
 
 #endif /* LIBREDES_H_ */

@@ -20,11 +20,14 @@
  *
  * */
 
+
+int serverConnected;
+
 void c_help(){
 
 }
 
-void c_connect(int* serverConnected, char* servername, int port){
+void c_connect(int* serverConnected2, char* servername, int port){
 	int status;
 	struct addrinfo hints, *servinfo;
 
@@ -39,17 +42,19 @@ void c_connect(int* serverConnected, char* servername, int port){
 	}
 
 	/* Se crea el socket */
-	*serverConnected = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
+	*serverConnected2 = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
 
-	if(*serverConnected < 0){
+	if(*serverConnected2 < 0){
 		perror("Error creando socket");
 	}
 
 	/* Comprueba si se puede conectar */
-	if(connect(*serverConnected, servinfo->ai_addr, servinfo->ai_addrlen) <0){
+	if(connect(*serverConnected2, servinfo->ai_addr, servinfo->ai_addrlen) <0){
 		fprintf(stderr, "Error en la conexion con el servidor %s:%i", servername, port);
 		exit(-1);
 	}
+
+	serverConnected = *serverConnected2;
 
 	freeaddrinfo(servinfo);
 }
@@ -81,7 +86,25 @@ void c_connect2(int serverConnected, char* servername, int port){
 }
 
 void c_auth(char* cadena){
-	printf("%s \n" , cadena);
+	char* mensaje;
+	int length;
+
+	mensaje = "NICK ";
+
+	mensaje = concatenar(mensaje, cadena, "\r\n", NULL);
+	printf("%s" , mensaje);
+
+	length = strlen(mensaje);
+	enviar(mensaje, length);
+
+	mensaje = "USER ";
+
+	mensaje = concatenar(mensaje, cadena, "\r\n", NULL);
+	printf("%s" , mensaje);
+
+	length = strlen(mensaje);
+	enviar(mensaje, length);
+
 }
 
 void c_list(){
@@ -128,10 +151,43 @@ void c_connectChannel(){
 
 }
 
+
+/* Concatena string */
+char* concatenar(char* mensaje, char* mensaje2, char* mensaje3, char* mensaje4) {
+	char* aux;
+	int length = strlen(mensaje);
+	int length2 = strlen(mensaje2);
+	int length3= 0;
+	int length4= 0;
+	if(mensaje3 != NULL){
+		length3 = strlen(mensaje3);
+	}
+	if(mensaje4 != NULL){
+		length4 = strlen(mensaje4);
+	}
+	aux = malloc(sizeof(char)*(length+length2+length3+length4));
+	*aux = '\0';
+	strcat(aux, mensaje);
+	strcat(aux, mensaje2);
+	if(mensaje3 != NULL){
+		strcat(aux, mensaje3);
+	}
+	if(mensaje4 != NULL){
+		strcat(aux, mensaje4);
+	}
+
+	return aux;
+}
+
 /* Obtiene la ip a traves de su hostname */
 char* obtenerIpServer(char* server) {
 	struct sockaddr_in host;
 
 	host.sin_addr = * (struct in_addr*) gethostbyname(server)->h_addr;
 	return inet_ntoa(host.sin_addr);
+}
+
+/* Envia al servidor los datos */
+void enviar(char* mensaje, int length) {
+	send(serverConnected,mensaje,length,0);
 }
