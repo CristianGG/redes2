@@ -88,7 +88,7 @@ void c_connect2(int serverConnected, char* servername, int port){
 void c_auth(char* cadena){
 	char* mensaje;
 	int length;
-
+	char* aux;
 	mensaje = "NICK ";
 
 	mensaje = concatenar(mensaje, cadena, "\r\n", NULL);
@@ -98,8 +98,8 @@ void c_auth(char* cadena){
 	enviar(mensaje, length);
 
 	mensaje = "USER ";
-
-	mensaje = concatenar(mensaje, cadena, "\r\n", NULL);
+	aux = concatenar(cadena, "\r\n", NULL, NULL);
+	mensaje = concatenar(mensaje, cadena, aux, NULL);
 	printf("%s" , mensaje);
 
 	length = strlen(mensaje);
