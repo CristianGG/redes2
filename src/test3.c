@@ -51,6 +51,9 @@ struct palabra {
 
 int serverConnected;
 
+fd_set descriptorLectura;
+int fdmax;
+
 /**
  * Funciones
  * */
@@ -191,6 +194,7 @@ void shell() {
 int main(int argc, char *argv[]){
 	char *program_name = argv[0];
 	int opt;
+	int i;
 
 	printf("Inicio \n");
 
@@ -242,6 +246,67 @@ int main(int argc, char *argv[]){
 		}
 	}
 	
+	FD_ZERO(&descriptorLectura);
+
+	FD_SET(serverConnected, &descriptorLectura);
+
+	fdmax = serverConnected;
+
+	while(1) {
+
+		if (select(fdmax+1, &descriptorLectura, NULL, NULL, NULL) == -1) {
+			perror("select");
+			exit(4);
+		}
+
+
+		for(i = 0; i <= fdmax; i++) {
+			if (FD_ISSET(i, &descriptorLectura)) {
+				if (i == serverConnected) {
+					shell();
+
+					if (newfd == -1) {
+						perror("accept");
+					} else {
+						FD_SET(newfd, &master);
+						if (newfd > fdmax) {
+							fdmax = newfd;
+						}
+						printf("selectserver: new connection from %s on "
+							"socket %d\n",
+							inet_ntop(remoteaddr.ss_family,
+								get_in_addr((struct sockaddr*)&remoteaddr),
+								remoteIP, INET6_ADDRSTRLEN),
+							newfd);
+					}
+				} else {
+
+					if ((nbytes = recv(i, buf, sizeof buf, 0)) <= 0) {
+
+						if (nbytes == 0) {
+
+							printf("selectserver: socket %d hung up\n", i);
+						} else {
+							perror("recv");
+						}
+						close(i);
+						FD_CLR(i, &master);
+					} else {
+						for(j = 0; j <= fdmax; j++) {
+							if (FD_ISSET(j, &master)) {
+								if (j != listener && j != i) {
+									if (send(j, buf, nbytes, 0) == -1) {
+										perror("send");
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	shell();
 	
 	printf("Fin \n");
