@@ -1,4 +1,4 @@
-#include "libRedes.c"
+#include "libRedes.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,7 +22,6 @@
  * */
 
 void shell();
-char* obtenerIpServer(char* server);
 
 /**
  * Atributos Globales:
@@ -34,7 +33,7 @@ struct inicio {
  */
     unsigned int serv:1;
     char* servername;
-    unsigned int port;
+    char* port;
 
     unsigned int nick:1;
     char* nickname;
@@ -70,7 +69,7 @@ void obtenerHostPort(char* host) {
 	estado.servername = strtok(host, ":");
 	aux = strtok(NULL, ":");
 	if(aux != NULL){
-		estado.port = strtol(aux, NULL, 10);
+		estado.port = aux;
 	}else{
 		estado.serv = 0;
 		estado.servername = NULL;
@@ -81,16 +80,16 @@ void obtenerHostPort(char* host) {
 void shell() {
 	char line[1024];
 		char *pch;
-		int exit = 0;
 		char* aux;
 		char** auxArray;
 		int i = 1;
 
-		do {
-			fprintf(stdout, "c> ");
-			memset(line, 0, 1024);
-			pch = fgets(line, 1024, stdin);
+		memset(line, 0, 1024);
+		pch = fgets(line, 1024, stdin);
 
+
+
+		if(pch != NULL){
 			if ( (strlen(line)>1) && ((line[strlen(line)-1]=='\n') || (line[strlen(line)-1]=='\r')) )
 				line[strlen(line)-1]='\0';
 
@@ -123,7 +122,7 @@ void shell() {
 					if (palabra.cantidad == 2){
 						obtenerHostPort(palabra.nombre[1]);
 						if(estado.serv){
-							c_connect(&serverConnected, estado.servername, estado.port);
+							c_connect(&serverConnected, &descriptorLectura, &fdmax, estado.servername, estado.port);
 						}
 					}else
 						printf("Syntax error. Use: /connect <host:port>\n");
@@ -170,7 +169,6 @@ void shell() {
 				} else if (strcmp(palabra.nombre[0],"/quit")==0) {
 					if (palabra.cantidad == 1){
 						c_quit();
-						exit = 1;
 					} else
 						printf("Syntax error. Use: /quit\n");
 				} else if (strcmp(palabra.nombre[0],"/nop")==0) {
@@ -187,8 +185,9 @@ void shell() {
 					fprintf(stderr, "Error: command '%s' not valid.\n", palabra.nombre[0]);
 				}
 			}
-				free(auxArray);
-		} while ((pch != NULL) && (!exit));
+			free(auxArray);
+		}
+
 }
 
 int main(int argc, char *argv[]){
@@ -216,7 +215,7 @@ int main(int argc, char *argv[]){
 				estado.channelname = optarg;
 				break;
 			case '?':
-				if ((optopt == 's') || (optopt == 'p'))
+				if (optopt == 's')
 					fprintf (stderr, "Option -%c requires an argument.\n", optopt);
 				else if (isprint (optopt))
 					fprintf (stderr, "Unknown option `-%c'.\n", optopt);
@@ -232,82 +231,47 @@ int main(int argc, char *argv[]){
 		printf("MODO DEBUG \n");
 	}
 	
+	FD_ZERO(&descriptorLectura);
+	FD_SET(0, &descriptorLectura);
+
 	if(estado.serv){
-		c_connect(&serverConnected, estado.servername, estado.port);
+		c_connect(&serverConnected, &descriptorLectura, &fdmax, estado.servername, estado.port);
 		printf("Server:%s \n", estado.servername);
-		printf("Port: %u \n", estado.port);
+		printf("Port: %s \n", estado.port);
 		if(estado.nick){
 			c_auth(estado.nickname);
 			printf("Nick: %s \n", estado.nickname);
 		}
 		if(estado.channel){
-			c_connectChannel();
+			c_join(estado.channelname);
 			printf("Canal: %s \n", estado.channelname);
 		}
+	}else{
+		fdmax = 0;
 	}
 	
-	FD_ZERO(&descriptorLectura);
-
-	FD_SET(serverConnected, &descriptorLectura);
-
-	fdmax = serverConnected;
-
+	printf("Descriptor socket: %i \n", serverConnected);
+	printf("fdmax: %i \n",fdmax);
 	while(1) {
 
 		if (select(fdmax+1, &descriptorLectura, NULL, NULL, NULL) == -1) {
 			perror("select");
 			exit(4);
 		}
-
-
 		for(i = 0; i <= fdmax; i++) {
+
 			if (FD_ISSET(i, &descriptorLectura)) {
-				if (i == serverConnected) {
+				if (i == 0) {
+					fprintf(stdout, "c> ");
 					shell();
+				} else if (i == serverConnected) {
+					recibirMensaje();
+				}else{
 
-					if (newfd == -1) {
-						perror("accept");
-					} else {
-						FD_SET(newfd, &master);
-						if (newfd > fdmax) {
-							fdmax = newfd;
-						}
-						printf("selectserver: new connection from %s on "
-							"socket %d\n",
-							inet_ntop(remoteaddr.ss_family,
-								get_in_addr((struct sockaddr*)&remoteaddr),
-								remoteIP, INET6_ADDRSTRLEN),
-							newfd);
-					}
-				} else {
-
-					if ((nbytes = recv(i, buf, sizeof buf, 0)) <= 0) {
-
-						if (nbytes == 0) {
-
-							printf("selectserver: socket %d hung up\n", i);
-						} else {
-							perror("recv");
-						}
-						close(i);
-						FD_CLR(i, &master);
-					} else {
-						for(j = 0; j <= fdmax; j++) {
-							if (FD_ISSET(j, &master)) {
-								if (j != listener && j != i) {
-									if (send(j, buf, nbytes, 0) == -1) {
-										perror("send");
-									}
-								}
-							}
-						}
-					}
 				}
 			}
 		}
 	}
-
-	shell();
 	
 	printf("Fin \n");
 

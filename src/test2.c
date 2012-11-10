@@ -1,4 +1,4 @@
-#include "libRedes.c"
+#include "libRedes.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,7 +22,6 @@
  * */
 
 void shell();
-char* obtenerIpServer(char* server);
 
 /**
  * Atributos Globales:
@@ -34,7 +33,7 @@ struct inicio {
  */
     unsigned int serv:1;
     char* servername;
-    unsigned int port;
+    char* port;
 
     unsigned int nick:1;
     char* nickname;
@@ -50,7 +49,7 @@ struct palabra {
 } palabra;
 
 int serverConnected;
-
+int fdmax = 0;
 /**
  * Funciones
  * */
@@ -67,7 +66,7 @@ void obtenerHostPort(char* host) {
 	estado.servername = strtok(host, ":");
 	aux = strtok(NULL, ":");
 	if(aux != NULL){
-		estado.port = strtol(aux, NULL, 10);
+		estado.port = aux;
 	}else{
 		estado.serv = 0;
 		estado.servername = NULL;
@@ -120,7 +119,7 @@ void shell() {
 					if (palabra.cantidad == 2){
 						obtenerHostPort(palabra.nombre[1]);
 						if(estado.serv){
-							c_connect(&serverConnected, estado.servername, estado.port);
+							c_connect(&serverConnected, &fdmax, estado.servername, estado.port);
 						}
 					}else
 						printf("Syntax error. Use: /connect <host:port>\n");
@@ -212,7 +211,7 @@ int main(int argc, char *argv[]){
 				estado.channelname = optarg;
 				break;
 			case '?':
-				if ((optopt == 's') || (optopt == 'p'))
+				if (optopt == 's')
 					fprintf (stderr, "Option -%c requires an argument.\n", optopt);
 				else if (isprint (optopt))
 					fprintf (stderr, "Unknown option `-%c'.\n", optopt);
@@ -229,16 +228,14 @@ int main(int argc, char *argv[]){
 	}
 	
 	if(estado.serv){
-		c_connect(&serverConnected, estado.servername, estado.port);
+		c_connect(&serverConnected, &fdmax, estado.servername, estado.port);
 		printf("Server:%s \n", estado.servername);
-		printf("Port: %u \n", estado.port);
+		printf("Port: %s \n", estado.port);
 		if(estado.nick){
 			c_auth(estado.nickname);
-			printf("Nick: %s \n", estado.nickname);
 		}
 		if(estado.channel){
-			c_connectChannel();
-			printf("Canal: %s \n", estado.channelname);
+			c_join(estado.channelname);
 		}
 	}
 	

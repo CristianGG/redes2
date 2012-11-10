@@ -71,7 +71,7 @@ void c_help(){
 	"*** The rest of the lines are echoes of the user commands.\n");
 }
 
-void c_connect(int* serverConnected2, char* servername, int port){
+void c_connect(int* serverConnected2, fd_set* descriptorLectura ,int* fdmax, char* servername, char* port){
 	int status;
 	struct addrinfo hints, *servinfo;
 
@@ -80,7 +80,7 @@ void c_connect(int* serverConnected2, char* servername, int port){
 	hints.ai_socktype = SOCK_STREAM;
 	hints.ai_flags = AI_PASSIVE;
 
-	if ((status = getaddrinfo(servername, "7102", &hints, &servinfo)) != 0) {
+	if ((status = getaddrinfo(servername, port, &hints, &servinfo)) != 0) {
 	    fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
 	    exit(1);
 	}
@@ -94,39 +94,18 @@ void c_connect(int* serverConnected2, char* servername, int port){
 
 	/* Comprueba si se puede conectar */
 	if(connect(*serverConnected2, servinfo->ai_addr, servinfo->ai_addrlen) <0){
-		fprintf(stderr, "Error en la conexion con el servidor %s:%i", servername, port);
+		fprintf(stderr, "Error en la conexion con el servidor %s:%s", servername, port);
 		exit(-1);
-	}
+	}else
+		FD_SET(*serverConnected2, descriptorLectura);
 
 	serverConnected = *serverConnected2;
 
+	if (*fdmax < serverConnected){
+			*fdmax = serverConnected;
+	}
+
 	freeaddrinfo(servinfo);
-}
-
-void c_connect2(int serverConnected, char* servername, int port){
-	struct sockaddr_in serverIn;
-
-	/* Se crea el socket */
-	serverConnected = socket(AF_INET, SOCK_STREAM, 0);
-
-	if(serverConnected < 0){
-		perror("Error creando socket");
-	}
-
-	/* Obtiene la direccion del servidor */
-	serverIn.sin_family = AF_INET;
-	serverIn.sin_port = htons(port);
-	serverIn.sin_addr.s_addr = inet_addr(servername);
-
-	/* Comprueba si se puede conectar */
-	if(connect(serverConnected, (struct sockaddr *) &serverIn, sizeof(serverIn)) <0){
-		char* ip = obtenerIpServer(servername);
-		serverIn.sin_addr.s_addr = inet_addr(ip);
-		if(connect(serverConnected, (struct sockaddr *) &serverIn, sizeof(serverIn)) <0){
-			fprintf(stderr, "Error en la conexion con el servidor %s:%i", servername, port);
-			exit(-1);
-		}
-	}
 }
 
 void c_auth(char* cadena){
@@ -137,13 +116,12 @@ void c_auth(char* cadena){
 
 	mensaje = concatenar(mensaje, cadena, "\r\n", NULL);
 	printf("%s" , mensaje);
-
 	length = strlen(mensaje);
 	enviar(mensaje, length);
 
 	mensaje = "USER ";
 	aux = concatenar(cadena, "\r\n", NULL, NULL);
-	mensaje = concatenar(mensaje, cadena, aux, NULL);
+	mensaje = concatenar(mensaje, cadena, " 0 * :", aux);
 	printf("%s" , mensaje);
 
 	length = strlen(mensaje);
@@ -157,6 +135,11 @@ void c_list(){
 
 void c_join(char* cadena){
 	printf("%s \n" , cadena);
+}
+
+int c_joinServer(char* cadena){
+	printf("%s \n" , cadena);
+	return 1;
 }
 
 void c_leave(){
@@ -191,10 +174,39 @@ void c_sleep(char* cadena){
 	printf("%s \n" , cadena);
 }
 
-void c_connectChannel(){
-
+void c_ping(char* cadena){
+	printf("%s \n" , cadena);
 }
 
+int c_pingServer(char* cadena){
+	printf("%s \n" , cadena);
+	return 1;
+}
+
+void c_pong(char* cadena){
+	char* mensaje;
+	int length;
+	mensaje = "PONG ";
+
+	mensaje = concatenar(mensaje, cadena, "\r\n", NULL);
+	printf("%s" , mensaje);
+	length = strlen(mensaje);
+	enviar(mensaje, length);
+}
+
+/* Recibe del servidor los datos */
+void recibirMensaje() {
+	char* mensaje = NULL;
+	recibir(&mensaje);
+	printf("PETA2 \n");
+	if(c_pingServer((mensaje))){
+		c_pong(mensaje);
+	}else if(c_joinServer(mensaje)){
+		c_pong(mensaje);
+	}else if(c_joinServer(mensaje)){
+		c_pong(mensaje);
+	}
+}
 
 /* Concatena string */
 char* concatenar(char* mensaje, char* mensaje2, char* mensaje3, char* mensaje4) {
@@ -235,4 +247,37 @@ char* obtenerIpServer(char* server) {
 void enviar(char* mensaje, int length) {
 	/* FALTA POR HACER EL BUCLE PARA LOS DATOS NO ENVIADOS*/
 	send(serverConnected,mensaje,length,0);
+}
+
+/* Recibe del servidor los datos */
+void recibir(char** mensaje) {
+	int length = 4;
+	char* aux;
+	aux = calloc(length, sizeof(char));
+	(*mensaje) = calloc(length, sizeof(char));
+	printf("Recv \n");
+	do{
+		length = recv(serverConnected,aux,4,0);
+
+		if(length > 0){
+			printf("%s \n",*mensaje);
+			length = strlen(*mensaje)+4;
+			aux  = calloc(length, sizeof(char));
+			strtok(aux, (*mensaje));
+			free((*mensaje));
+			(*mensaje) = calloc(length + 4, sizeof(char));
+			strcpy((*mensaje), aux);
+			free(aux);
+		}
+	}while(length > 0);
+	printf("%s",*mensaje);
+}
+
+/* Comprueba los errores */
+void error(int codigo) {
+	switch(codigo){
+
+
+
+	}
 }

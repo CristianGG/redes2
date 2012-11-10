@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS= -Wfatal-errors -Werror -Wall -Wextra -std=c89 -pedantic-errors -g -O0 -D_BSD_SOURCE -D_POSIX_SOURCE=200112L -lpthread
 PRGS = test3
 OBJS = 
-LIBS = 
+LIBS = libRedes.c
 
 all: clean $(PRGS)
 
