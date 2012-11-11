@@ -2,7 +2,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <strings.h>
 #include <string.h>
 #include <unistd.h>
 #include <getopt.h>
@@ -85,7 +84,7 @@ void c_connect(int* serverConnected2, fd_set* descriptorLectura ,int* fdmax, cha
 	    exit(1);
 	}
 
-	/* Se crea el socket */
+	/* Se crea el socket no bloqueante */
 	*serverConnected2 = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
 
 	if(*serverConnected2 < 0){
@@ -127,6 +126,7 @@ void c_auth(char* cadena){
 	length = strlen(mensaje);
 	enviar(mensaje, length);
 
+	free(mensaje);
 }
 
 void c_list(){
@@ -138,8 +138,10 @@ void c_join(char* cadena){
 }
 
 int c_joinServer(char* cadena){
-	printf("%s \n" , cadena);
-	return 1;
+	if(strstr(cadena, "JOIN"))
+		return 1;
+	else
+		return 0;
 }
 
 void c_leave(){
@@ -179,33 +181,37 @@ void c_ping(char* cadena){
 }
 
 int c_pingServer(char* cadena){
-	printf("%s \n" , cadena);
-	return 1;
+	if(strstr(cadena, "PING"))
+		return 1;
+	else
+		return 0;
 }
 
 void c_pong(char* cadena){
 	char* mensaje;
+	char* aux = strtok(cadena, "PING ");
 	int length;
 	mensaje = "PONG ";
 
-	mensaje = concatenar(mensaje, cadena, "\r\n", NULL);
+	mensaje = concatenar(mensaje, aux, "\r\n", NULL);
 	printf("%s" , mensaje);
 	length = strlen(mensaje);
 	enviar(mensaje, length);
+
+	free(mensaje);
 }
 
 /* Recibe del servidor los datos */
 void recibirMensaje() {
 	char* mensaje = NULL;
 	recibir(&mensaje);
-	printf("PETA2 \n");
+
 	if(c_pingServer((mensaje))){
 		c_pong(mensaje);
 	}else if(c_joinServer(mensaje)){
 		c_pong(mensaje);
-	}else if(c_joinServer(mensaje)){
-		c_pong(mensaje);
-	}
+	}else
+		printf("%s \n",mensaje);
 }
 
 /* Concatena string */
@@ -245,32 +251,32 @@ char* obtenerIpServer(char* server) {
 
 /* Envia al servidor los datos */
 void enviar(char* mensaje, int length) {
-	/* FALTA POR HACER EL BUCLE PARA LOS DATOS NO ENVIADOS*/
+	/* FALTA POR HACER EL BUCLE PARA LOS DATOS NO ENVIADOS */
 	send(serverConnected,mensaje,length,0);
 }
 
 /* Recibe del servidor los datos */
 void recibir(char** mensaje) {
-	int length = 4;
+	int length;
 	char* aux;
-	aux = calloc(length, sizeof(char));
-	(*mensaje) = calloc(length, sizeof(char));
-	printf("Recv \n");
+	char* aux2;
+	aux = calloc(2, sizeof(char));
+	/* AQUI VALGRIND */
+	(*mensaje) = calloc(2, sizeof(char));
+
 	do{
-		length = recv(serverConnected,aux,4,0);
+		length = recv(serverConnected,aux,2,0);
 
 		if(length > 0){
-			printf("%s \n",*mensaje);
-			length = strlen(*mensaje)+4;
-			aux  = calloc(length, sizeof(char));
-			strtok(aux, (*mensaje));
-			free((*mensaje));
-			(*mensaje) = calloc(length + 4, sizeof(char));
-			strcpy((*mensaje), aux);
-			free(aux);
+			length = strlen(*mensaje)+strlen(aux)+1;
+			aux2 = calloc(length, sizeof(char));
+			strcat(aux2,(*mensaje));
+			strcat(aux2,aux);
+			free(*mensaje);
+			(*mensaje) = calloc(length, sizeof(char));
+			(*mensaje) = aux2;
 		}
-	}while(length > 0);
-	printf("%s",*mensaje);
+	}while(strstr(*mensaje, "\n") == NULL && length > 0);
 }
 
 /* Comprueba los errores */

@@ -2,7 +2,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <strings.h>
 #include <string.h>
 #include <unistd.h>
 #include <getopt.h>
@@ -49,7 +48,6 @@ struct palabra {
 } palabra;
 
 int serverConnected;
-
 fd_set descriptorLectura;
 int fdmax;
 
@@ -232,7 +230,6 @@ int main(int argc, char *argv[]){
 	}
 	
 	FD_ZERO(&descriptorLectura);
-	FD_SET(0, &descriptorLectura);
 
 	if(estado.serv){
 		c_connect(&serverConnected, &descriptorLectura, &fdmax, estado.servername, estado.port);
@@ -249,6 +246,8 @@ int main(int argc, char *argv[]){
 	}else{
 		fdmax = 0;
 	}
+
+	FD_SET(0, &descriptorLectura);
 	
 	printf("Descriptor socket: %i \n", serverConnected);
 	printf("fdmax: %i \n",fdmax);
@@ -259,7 +258,6 @@ int main(int argc, char *argv[]){
 			exit(4);
 		}
 		for(i = 0; i <= fdmax; i++) {
-
 			if (FD_ISSET(i, &descriptorLectura)) {
 				if (i == 0) {
 					fprintf(stdout, "c> ");
