@@ -51,7 +51,7 @@ char* concatenar(char* mensaje, char* mensaje2, char* mensaje3, char* mensaje4);
 
 char* obtenerIpServer(char* server);
 
-void enviar(char* mensaje, int length);
+int enviar(char* mensaje, int length);
 
 void recibir(char** mensaje);
 

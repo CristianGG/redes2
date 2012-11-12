@@ -250,9 +250,19 @@ char* obtenerIpServer(char* server) {
 }
 
 /* Envia al servidor los datos */
-void enviar(char* mensaje, int length) {
-	/* FALTA POR HACER EL BUCLE PARA LOS DATOS NO ENVIADOS */
-	send(serverConnected,mensaje,length,0);
+int enviar(char* mensaje, int length) {
+	int enviados;
+	int posicion = 0;
+	while(length > 0){
+		enviados = send(serverConnected,&mensaje[posicion],length,0);
+
+		posicion = posicion +enviados;
+		length = enviados - length;
+		if (length == -1 && enviados == -1){
+			return -1;
+		}
+	}
+	return 0;
 }
 
 /* Recibe del servidor los datos */
