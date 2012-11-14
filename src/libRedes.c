@@ -81,7 +81,7 @@ void c_connect(int* serverConnected2, fd_set* descriptorLectura ,int* fdmax, cha
 
 	if ((status = getaddrinfo(servername, port, &hints, &servinfo)) != 0) {
 	    fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
-	    exit(1);
+
 	}
 
 	/* Se crea el socket no bloqueante */
@@ -95,9 +95,10 @@ void c_connect(int* serverConnected2, fd_set* descriptorLectura ,int* fdmax, cha
 	if(connect(*serverConnected2, servinfo->ai_addr, servinfo->ai_addrlen) <0){
 		fprintf(stderr, "Error en la conexion con el servidor %s:%s", servername, port);
 		exit(-1);
-	}else
+	}else{
+		printf("*** Connected to server %s:%s", servername, port);
 		FD_SET(*serverConnected2, descriptorLectura);
-
+	}
 	serverConnected = *serverConnected2;
 
 	if (*fdmax < serverConnected){
@@ -134,7 +135,17 @@ void c_list(){
 }
 
 void c_join(char* cadena){
-	printf("%s \n" , cadena);
+	char* mensaje;
+	int length;
+
+	mensaje = "JOIN ";
+
+	mensaje = concatenar(mensaje, cadena, "\r\n", NULL);
+	printf("%s" , mensaje);
+	length = strlen(mensaje);
+	enviar(mensaje, length);
+
+	free(mensaje);
 }
 
 int c_joinServer(char* cadena){

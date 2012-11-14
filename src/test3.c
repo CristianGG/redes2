@@ -85,8 +85,6 @@ void shell() {
 		memset(line, 0, 1024);
 		pch = fgets(line, 1024, stdin);
 
-
-
 		if(pch != NULL){
 			if ( (strlen(line)>1) && ((line[strlen(line)-1]=='\n') || (line[strlen(line)-1]=='\r')) )
 				line[strlen(line)-1]='\0';
@@ -264,8 +262,6 @@ int main(int argc, char *argv[]){
 					shell();
 				} else if (i == serverConnected) {
 					recibirMensaje();
-				}else{
-
 				}
 			}
 		}
