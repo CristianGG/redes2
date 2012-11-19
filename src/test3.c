@@ -231,15 +231,12 @@ int main(int argc, char *argv[]){
 
 	if(estado.serv){
 		c_connect(&serverConnected, &descriptorLectura, &fdmax, estado.servername, estado.port);
-		printf("Server:%s \n", estado.servername);
-		printf("Port: %s \n", estado.port);
+
 		if(estado.nick){
 			c_auth(estado.nickname);
-			printf("Nick: %s \n", estado.nickname);
 		}
 		if(estado.channel){
 			c_join(estado.channelname);
-			printf("Canal: %s \n", estado.channelname);
 		}
 	}else{
 		fdmax = 0;

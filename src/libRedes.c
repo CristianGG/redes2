@@ -21,6 +21,7 @@
 
 
 int serverConnected;
+char* host;
 
 void c_help(){
 	printf(
@@ -96,7 +97,7 @@ void c_connect(int* serverConnected2, fd_set* descriptorLectura ,int* fdmax, cha
 		fprintf(stderr, "Error en la conexion con el servidor %s:%s", servername, port);
 		exit(-1);
 	}else{
-		printf("*** Connected to server %s:%s", servername, port);
+		printf("*** Connected to server %s:%s \n", servername, port);
 		FD_SET(*serverConnected2, descriptorLectura);
 	}
 	serverConnected = *serverConnected2;
@@ -115,14 +116,12 @@ void c_auth(char* cadena){
 	mensaje = "NICK ";
 
 	mensaje = concatenar(mensaje, cadena, "\r\n", NULL);
-	printf("%s" , mensaje);
 	length = strlen(mensaje);
 	enviar(mensaje, length);
 
 	mensaje = "USER ";
 	aux = concatenar(cadena, "\r\n", NULL, NULL);
 	mensaje = concatenar(mensaje, cadena, " 0 * :", aux);
-	printf("%s" , mensaje);
 
 	length = strlen(mensaje);
 	enviar(mensaje, length);
@@ -222,7 +221,20 @@ void recibirMensaje() {
 	}else if(c_joinServer(mensaje)){
 		c_pong(mensaje);
 	}else
-		printf("%s \n",mensaje);
+		parser(mensaje);
+}
+
+void parser(char* mensaje) {
+	char* grupo;
+	char* codigo;
+	char* cadena;
+
+	grupo = strtok(mensaje, " ");
+	codigo = strtok(NULL, " ");
+	strtok(NULL, ":");
+	cadena = strtok(NULL, ":");
+	mensaje = strstr(mensaje,"\r\n");
+	checkCodigo(grupo,strtol(codigo, NULL, 10), cadena);
 }
 
 /* Concatena string */
@@ -281,14 +293,21 @@ void recibir(char** mensaje) {
 	int length;
 	char* aux;
 	char* aux2;
+	int leer;
 	aux = calloc(2, sizeof(char));
 	/* AQUI VALGRIND */
 	(*mensaje) = calloc(2, sizeof(char));
+	leer = 2;
 
 	do{
-		length = recv(serverConnected,aux,2,0);
+		length = recv(serverConnected,aux,leer,0);
 
 		if(length > 0){
+			if(strstr(aux, "\r")){
+				leer = 1;
+			}else{
+				leer = 2;
+			}
 			length = strlen(*mensaje)+strlen(aux)+1;
 			aux2 = calloc(length, sizeof(char));
 			strcat(aux2,(*mensaje));
@@ -301,10 +320,58 @@ void recibir(char** mensaje) {
 }
 
 /* Comprueba los errores */
-void error(int codigo) {
+void checkCodigo(char* grupo, int codigo, char* cadena) {
 	switch(codigo){
-
-
-
+	case 1:
+		host = strtok(grupo,":");
+		printf("*** %s (from %s)\n", cadena, host);
+		break;
+	case 2:printf("*** %s \n", cadena);break;
+	case 3:printf("*** %s \n", cadena);break;
+	case 4:printf("%s \n", cadena);break;
+	case 5:printf("%s \n", cadena);break;
+	case 6:printf("%s \n", cadena);break;
+	case 7:printf("%s \n", cadena);break;
+	default: break;
 	}
+}
+
+/* Busca la 1a cadena repetida y devuelve el resto sin ella*/
+void strrem(char* origen, char* dest, char* substring){
+	int i = 0;
+	int j = 0;
+	int pos = -1;
+	int encontrado = 0;
+	int length = strlen(origen);
+	int lengthsub = strlen(substring);
+
+	for(i = 0; i < length; i++){
+		if(encontrado == 0){
+			if(origen[i] == substring[j]){
+				j++;
+				if(pos == -1){
+					pos = i;
+				}else if (j == lengthsub){
+					encontrado = 1;
+				}
+			}else{
+				pos = -1;
+				j = 0;
+			}
+		}
+	}
+	if(pos != -1){
+		dest = calloc(length-lengthsub+1, sizeof(char));
+		strncpy(dest, &origen[0],pos);
+		strncpy(&dest[pos], &origen[pos+lengthsub],(length-lengthsub-pos));
+		dest[length] = '\0';
+	}
+}
+
+/** Busca la cadena y devuelve la cadena comprendida*/
+/*length es la cadena que se quiere obtener*/
+void strsub(char* origen, char* dest, int posIni, int length){
+	dest = calloc(length+posIni+1, sizeof(char));
+	strncpy(dest, &origen[posIni], length);
+	dest[length] = '\0';
 }

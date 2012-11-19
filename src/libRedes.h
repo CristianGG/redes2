@@ -47,6 +47,8 @@ void c_pong();
 
 void recibirMensaje();
 
+void parser(char* mensaje);
+
 char* concatenar(char* mensaje, char* mensaje2, char* mensaje3, char* mensaje4);
 
 char* obtenerIpServer(char* server);
@@ -55,6 +57,10 @@ int enviar(char* mensaje, int length);
 
 void recibir(char** mensaje);
 
-void error(int codigo);
+void checkCodigo(char* mensaje, int codigo, char* cadena);
+
+void strrem(char* origen, char* dest, char* substring);
+
+void strsub(char* origen, char* dest, int posIni, int length);
 
 #endif /* LIBREDES_H_ */

@@ -1,4 +1,4 @@
-#include "libRedes.h"
+#include "libRedes.c"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,8 +20,6 @@
  *
  * */
 
-void shell();
-
 /**
  * Atributos Globales:
  * */
@@ -42,23 +40,13 @@ struct inicio {
     unsigned int debug:1;
 } estado;
 
-struct palabra {
-    int cantidad;
-    char** nombre;
-} palabra;
-
 int serverConnected;
-
 fd_set descriptorLectura;
 int fdmax;
 
 /**
  * Funciones
  * */
-
-void usage(char *program_name) {
-	printf("Usage: %s [-s host:port] [-n nick] [-c channel] [-d] \n", program_name);
-}
 
 /* Obtiene el host y el port que se le va a pasar por parametro */
 void obtenerHostPort(char* host) {
@@ -76,121 +64,43 @@ void obtenerHostPort(char* host) {
 	}
 }
 
-void shell() {
-	char line[1024];
-		char *pch;
-		char* aux;
-		char** auxArray;
-		int i = 1;
+void c_connect2(fd_set* descriptorLectura ,int* fdmax, char* servername, char* port){
+	int status;
+	struct addrinfo hints, *servinfo;
 
-		memset(line, 0, 1024);
-		pch = fgets(line, 1024, stdin);
+	memset(&hints, 0, sizeof hints);
+	hints.ai_family = AF_UNSPEC;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_flags = AI_PASSIVE;
 
+	if ((status = getaddrinfo(servername, port, &hints, &servinfo)) != 0) {
+	    fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
+	}
 
+	/* Se crea el socket no bloqueante */
+	serverConnected = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
 
-		if(pch != NULL){
-			if ( (strlen(line)>1) && ((line[strlen(line)-1]=='\n') || (line[strlen(line)-1]=='\r')) )
-				line[strlen(line)-1]='\0';
+	if(serverConnected < 0){
+		perror("Error creando socket");
+	}
 
+	/* Comprueba si se puede conectar */
+	if(connect(serverConnected, servinfo->ai_addr, servinfo->ai_addrlen) <0){
+		fprintf(stderr, "Error en la conexion con el servidor %s:%s", servername, port);
+		exit(-1);
+	}else{
+		printf("*** Connected to server %s:%s", servername, port);
+		FD_SET(serverConnected, descriptorLectura);
+	}
 
-			strtok(line, " ");
-			palabra.cantidad = 1;
-			while(strtok( NULL, " ") != NULL){
-				palabra.cantidad += 1;
-			}
+	if (*fdmax < serverConnected){
+			*fdmax = serverConnected;
+	}
 
-			auxArray = calloc(palabra.cantidad, sizeof(char*));
-			aux = strtok(line, " ");
-			auxArray[0] = aux;
-
-
-			while( (aux = strtok( NULL, " ")) != NULL){
-					auxArray[i] = aux;
-					i++;
-			}
-
-			palabra.nombre = auxArray;
-
-			if ( (palabra.nombre != NULL) && (palabra.cantidad > 0) ) {
-				if (strcmp(palabra.nombre[0],"/help")==0) {
-					if (palabra.cantidad == 1)
-						c_help();
-					else
-						printf("Syntax error. Use: /help\n");
-				} else if (strcmp(palabra.nombre[0],"/connect")==0) {
-					if (palabra.cantidad == 2){
-						obtenerHostPort(palabra.nombre[1]);
-						if(estado.serv){
-							c_connect(&serverConnected, &descriptorLectura, &fdmax, estado.servername, estado.port);
-						}
-					}else
-						printf("Syntax error. Use: /connect <host:port>\n");
-				} else if (strcmp(palabra.nombre[0],"/auth")==0) {
-					if (palabra.cantidad == 2)
-						c_auth(palabra.nombre[1]);
-					else
-						printf("Syntax error. Use: /auth <nick>\n");
-				} else if (strcmp(palabra.nombre[0],"/list")==0) {
-					if (palabra.cantidad == 1)
-						c_list();
-					else
-						printf("Syntax error. Use: /list\n");
-				} else if (strcmp(palabra.nombre[0],"/join")==0) {
-					if (palabra.cantidad == 2)
-						c_join(palabra.nombre[1]);
-					else
-						printf("Syntax error. Use: /join [<channel>]\n");
-				} else if (strcmp(palabra.nombre[0],"/leave")==0) {
-					if (palabra.cantidad == 1)
-						c_leave();
-					else
-						printf("Syntax error. Use: /leave\n");
-				} else if (strcmp(palabra.nombre[0],"/who")==0) {
-					if (palabra.cantidad == 1)
-						c_who();
-					else
-						printf("Syntax error. Use: /who\n");
-				} else if (strcmp(palabra.nombre[0],"/info")==0) {
-					if (palabra.cantidad == 2)
-						c_info(palabra.nombre[1]);
-					else
-						printf("Syntax error. Use: /info <user>\n");
-				} else if (strcmp(palabra.nombre[0],"/msg")==0) {
-					if (palabra.cantidad == 2)
-						c_msg(palabra.nombre[1]);
-					else
-						printf("Syntax error. Use: /msg <text>\n");
-				} else if (strcmp(palabra.nombre[0],"/disconnect")==0) {
-					if (palabra.cantidad == 1)
-						c_disconnect();
-					else
-						printf("Syntax error. Use: /disconnect\n");
-				} else if (strcmp(palabra.nombre[0],"/quit")==0) {
-					if (palabra.cantidad == 1){
-						c_quit();
-					} else
-						printf("Syntax error. Use: /quit\n");
-				} else if (strcmp(palabra.nombre[0],"/nop")==0) {
-					if (palabra.cantidad == 2)
-						c_nop(palabra.nombre[1]);
-					else
-						printf("Syntax error. Use: /nop [<text>]\n");
-				} else if (strcmp(palabra.nombre[0],"/sleep")==0) {
-					if (palabra.cantidad == 2)
-						c_sleep(palabra.nombre[1]);
-					else
-						printf("Syntax error. Use: /sleep [<secs>]\n");
-				} else {
-					fprintf(stderr, "Error: command '%s' not valid.\n", palabra.nombre[0]);
-				}
-			}
-			free(auxArray);
-		}
-
+	freeaddrinfo(servinfo);
 }
 
 int main(int argc, char *argv[]){
-	char *program_name = argv[0];
 	int opt;
 	int i;
 
@@ -221,7 +131,6 @@ int main(int argc, char *argv[]){
 				else
 					fprintf (stderr, "Unknown option character `\\x%x'.\n", optopt);
 			default:
-				usage(program_name);
 				exit(-1);
 		}
 	}
@@ -234,17 +143,9 @@ int main(int argc, char *argv[]){
 	FD_SET(0, &descriptorLectura);
 
 	if(estado.serv){
-		c_connect(&serverConnected, &descriptorLectura, &fdmax, estado.servername, estado.port);
+		c_connect2(&descriptorLectura, &fdmax, estado.servername, estado.port);
 		printf("Server:%s \n", estado.servername);
 		printf("Port: %s \n", estado.port);
-		if(estado.nick){
-			c_auth(estado.nickname);
-			printf("Nick: %s \n", estado.nickname);
-		}
-		if(estado.channel){
-			c_join(estado.channelname);
-			printf("Canal: %s \n", estado.channelname);
-		}
 	}else{
 		fdmax = 0;
 	}
@@ -252,7 +153,6 @@ int main(int argc, char *argv[]){
 	printf("Descriptor socket: %i \n", serverConnected);
 	printf("fdmax: %i \n",fdmax);
 	while(1) {
-
 		if (select(fdmax+1, &descriptorLectura, NULL, NULL, NULL) == -1) {
 			perror("select");
 			exit(4);
@@ -262,9 +162,9 @@ int main(int argc, char *argv[]){
 			if (FD_ISSET(i, &descriptorLectura)) {
 				if (i == 0) {
 					fprintf(stdout, "c> ");
-					shell();
+					printf("Descriptor de la entrada");
 				} else if (i == serverConnected) {
-					recibirMensaje();
+					printf("Descriptor de la salida");
 				}else{
 
 				}
