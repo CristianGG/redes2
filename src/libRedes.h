@@ -11,56 +11,58 @@
 
 #include <netdb.h>
 
-void c_help();
+int c_help();
 
-void c_connect(int* serverConnected, fd_set* descriptorLectura, int* fdmax, char* servername, char* port);
+int c_connect(int* serverConnected, fd_set* descriptorLectura, int* fdmax, char* servername, char* port);
 
-void c_auth(char* cadena);
+int c_auth(char* cadena);
 
-void c_list();
+int c_list();
 
-void c_join(char* cadena);
+int c_join(char* cadena);
 
 int c_joinServer(char* cadena);
 
-void c_leave();
+int c_leave();
 
-void c_who();
+int c_who(char* cadena);
 
-void c_info(char* cadena);
+int c_info(char* cadena);
 
-void c_msg(char* cadena);
+int c_msg(char* cadena);
 
-void c_disconnect();
+int c_disconnect();
 
-void c_quit();
+int c_quit();
 
-void c_nop(char* cadena);
+int c_nop(char* cadena);
 
-void c_sleep(char* cadena);
+int c_sleep(char* cadena);
 
-void c_ping();
+int c_ping();
 
 int c_pingServer();
 
-void c_pong();
+int c_pong();
 
-void recibirMensaje();
+int recibirMensaje();
 
-void parser(char* mensaje);
-
-char* concatenar(char* mensaje, char* mensaje2, char* mensaje3, char* mensaje4);
+int parser(char* mensaje);
 
 char* obtenerIpServer(char* server);
 
 int enviar(char* mensaje, int length);
 
-void recibir(char** mensaje);
+int recibir(char** mensaje);
 
-void checkCodigo(char* mensaje, int codigo, char* cadena);
+int checkCodigo(char* mensaje, int codigo, char* cadena);
 
-void strrem(char* origen, char* dest, char* substring);
+char* strcon(char* mensaje, char* mensaje2, char* mensaje3, char* mensaje4);
 
-void strsub(char* origen, char* dest, int posIni, int length);
+int strpos(char* origen, char* substring);
+
+int strrem(char* origen, char** dest, char* substring);
+
+int strsub(char* origen, char* dest, int posIni, int length);
 
 #endif /* LIBREDES_H_ */
