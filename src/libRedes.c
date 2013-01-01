@@ -1,15 +1,6 @@
 #include "libRedes.h"
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <getopt.h>
-#include <ctype.h>
 
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netdb.h>
 
 
 /* Autores:
@@ -22,6 +13,7 @@
 
 int serverConnected;
 char* host;
+int quit = 0;
 
 int c_help(){
         printf(
@@ -96,8 +88,8 @@ int c_connect(int* serverConnected2, fd_set* descriptorLectura ,int* fdmax, char
 
         /* Comprueba si se puede conectar */
         if(connect(*serverConnected2, servinfo->ai_addr, servinfo->ai_addrlen) <0){
-                fprintf(stderr, "Error en la conexion con el servidor %s:%s", servername, port);
-                exit(-1);
+                fprintf(stderr, "*** Unable to connect to server %s:%s", servername, port);
+                return 0;
         }else{
                 printf("*** Connected to server %s:%s \n", servername, port);
                 FD_SET(*serverConnected2, descriptorLectura);
@@ -116,6 +108,8 @@ int c_connect(int* serverConnected2, fd_set* descriptorLectura ,int* fdmax, char
 int c_auth(char* cadena){
         char* mensaje;
         int length;
+
+
 
         mensaje = "NICK ";
 
@@ -161,13 +155,6 @@ int c_join(char* cadena){
 			free(mensaje);
         }
         return 1;
-}
-
-int c_joinServer(char* cadena){
-        if(strstr(cadena, "JOIN") != NULL)
-			return 1;
-        else
-			return 0;
 }
 
 int c_leave(char* cadena){
@@ -231,28 +218,40 @@ int c_msg(char* channelname, char* cadena){
 		return 1;
 }
 
-int c_disconnect(){
+int c_disconnect(fd_set* descriptorLectura){
 		char* mensaje;
 		int length;
 
-		mensaje = "QUIT :Saludos!\r\n";
+		mensaje = "QUIT :Disconnected from server\r\n";
 
 		length = strlen(mensaje);
 		enviar(mensaje, length);
 
-		return 1;
+		quit = 0;
+
+		FD_CLR(serverConnected, descriptorLectura);
+
+		printf("*** Disconnected from server\n");
+
+		return quit;
 }
 
-int c_quit(){
+int c_quit(fd_set* descriptorLectura){
 		char* mensaje;
 		int length;
 
-		mensaje = "QUIT :Saludos!\r\n";
+		mensaje = "QUIT :Bye!\r\n";
 
 		length = strlen(mensaje);
 		enviar(mensaje, length);
 
-		return 1;
+		quit = -1;
+
+		FD_CLR(serverConnected, descriptorLectura);
+
+		printf("*** bye!\n");
+
+		return quit;
 }
 
 int c_nop(int depurar, char* cadena){
@@ -308,6 +307,27 @@ int c_pong(char* cadena){
 
 int c_error(char* cadena){
         if(strstr(cadena, "ERROR") != NULL)
+                return 1;
+        else
+                return 0;
+}
+
+int c_privmsg(char* cadena){
+        if(strstr(cadena, "PRIVMSG") != NULL)
+                return 1;
+        else
+                return 0;
+}
+
+int c_joinServer(char* cadena){
+        if(strstr(cadena, "JOIN") != NULL)
+                return 1;
+        else
+                return 0;
+}
+
+int c_leaveServer(char* cadena){
+        if(strstr(cadena, "PART") != NULL)
                 return 1;
         else
                 return 0;
@@ -371,7 +391,6 @@ int recibir(char** mensaje) {
         return 1;
 }
 
-
 /* Recibe del servidor los datos */
 int recibirMensaje() {
 		int tipo;
@@ -382,14 +401,60 @@ int recibirMensaje() {
             tipo = c_pong(mensaje);
         }else if(c_joinServer(mensaje) == 1){
             tipo = c_pong(mensaje);
+        }else if(c_leaveServer(mensaje) == 1){
+            tipo = c_leaveMsg(mensaje);
         }else if(c_error(mensaje) == 1){
-        	tipo = -1;
-        }else{
+        	if(quit == 0){
+        		tipo = parserError(mensaje);
+        	}else
+        		tipo = -1;
+        }else if(c_privmsg(mensaje) == 1){
+        	tipo = imprimir(mensaje);
+        }else
         	tipo = parser(mensaje);
-        }
         free(mensaje);
 
        	return tipo;
+}
+
+int imprimir(char* mensaje) {
+		char* user;
+		char* cadena;
+
+		strtok(mensaje, ":");
+		strtok(mensaje, ":");
+		user = strtok(mensaje, "!");
+		strtok(mensaje, ":");
+		cadena = strtok(mensaje, ":");
+		printf("<%s> %s\n", user, cadena);
+
+		return 0;
+}
+
+int c_leaveMsg(char* mensaje){
+	char* name;
+	char* channel;
+
+	printf("%s \n", mensaje);
+
+	strtok(mensaje, " ");
+	strtok(NULL, " ");
+	channel = strtok(NULL, ":");
+	name = strtok(NULL, "\r");
+
+	printf("*** %s has left channel %s \n", name, channel);
+
+	return 451;
+}
+
+int parserError(char* mensaje) {
+
+	printf("%s \n", mensaje);
+	if(strstr(mensaje, "down") != NULL){
+		printf("*** Connection to IRC server lost. Try to connect again in a few minutes\n");
+		return 504;
+	}
+	return 0;
 }
 
 int parser(char* mensaje) {
@@ -402,62 +467,66 @@ int parser(char* mensaje) {
         printf("%s \n", mensaje);
 
         grupo = strtok(mensaje, " ");
+        if(grupo != NULL){
+			codigo = strtol(strtok(NULL, " "), NULL, 10);
 
-        codigo = strtol(strtok(NULL, " "), NULL, 10);
+			if(codigo == 4){
+				strtok(NULL, " ");
+				strtok(NULL, " ");
+				strtok(NULL, " ");
+				grupo = strtok(NULL, " ");
+				aux = strtok(NULL, " ");
+			}else if(codigo == 254 || codigo == 333){
+				strtok(NULL, " ");
+				aux = strtok(NULL, " ");
+			}else if(codigo == 311){
+				strtok(NULL, " ");
+				grupo = strtok(NULL, " ");
+				strtok(NULL, " ");
+				aux = strtok(NULL, " ");
+			}else if(codigo == 317){
+				strtok(NULL, " ");
+				strtok(NULL, " ");
+				grupo = strtok(NULL, " ");
+				aux = strtok(NULL, " ");
+			}else if(codigo == 322){
+				strtok(NULL, " ");
+				grupo = strtok(NULL, " ");
+				aux = strtok(NULL, "\r\n");
+			}else if(codigo == 332){
+				grupo = strtok(NULL, " ");
+				aux = strtok(NULL, "\r\n");
+			}else if(codigo == 352){
+				strtok(NULL, " ");
+				grupo =	strtok(NULL, " ");
+				strtok(NULL, ":");
+				strtok(NULL, " ");
+				aux = strtok(NULL, " ");
+			}else if(codigo == 353){
+				strtok(NULL, "=");
+				grupo = strtok(NULL, ":");
+				aux = strtok(NULL, "\r\n");
+			}else{
+				strtok(NULL, ":");
+				aux = strtok(NULL, ":");
+			}
+			pos = strrem(aux, &cadena, "\r\n");
 
-        if(codigo == 4){
-			strtok(NULL, " ");
-			strtok(NULL, " ");
-			strtok(NULL, " ");
-			grupo = strtok(NULL, " ");
-			aux = strtok(NULL, " ");
-        }else if(codigo == 254 || codigo == 333){
-        	strtok(NULL, " ");
-        	aux = strtok(NULL, " ");
-        }else if(codigo == 311){
-            strtok(NULL, " ");
-        	grupo = strtok(NULL, " ");
-        	strtok(NULL, " ");
-        	aux = strtok(NULL, " ");
-        }else if(codigo == 317){
-        	strtok(NULL, " ");
-			strtok(NULL, " ");
-			grupo = strtok(NULL, " ");
-			aux = strtok(NULL, " ");
-        }else if(codigo == 322){
-        	strtok(NULL, " ");
-			grupo = strtok(NULL, " ");
-			aux = strtok(NULL, "\r\n");
-        }else if(codigo == 332){
-        	grupo = strtok(NULL, " ");
-        	aux = strtok(NULL, "\r\n");
-        }else if(codigo == 352){
-        	strtok(NULL, " ");
-			grupo =	strtok(NULL, " ");
-			strtok(NULL, ":");
-			strtok(NULL, " ");
-			aux = strtok(NULL, " ");
-        }else if(codigo == 353){
-        	strtok(NULL, "=");
-           	grupo = strtok(NULL, ":");
-           	aux = strtok(NULL, "\r\n");
+			if(codigo > 200 && codigo != 311 && codigo != 317 && codigo != 322 && codigo != 332 && codigo != 353 && codigo != 352){
+				grupo = NULL;
+			}
+
+			if(pos > 0){
+				checkCodigo(grupo, codigo, cadena);
+				free(cadena);
+			}else
+				checkCodigo(grupo, codigo, aux);
+
+			return codigo;
         }else{
-			strtok(NULL, ":");
-			aux = strtok(NULL, ":");
+        	printf("*** Problem with the message's server. Exit\n");
+        	return -1;
         }
-        pos = strrem(aux, &cadena, "\r\n");
-
-        if(codigo > 200 && codigo != 311 && codigo != 317 && codigo != 322 && codigo != 332 && codigo != 353 && codigo != 352){
-        	grupo = NULL;
-        }
-
-        if(pos > 0){
-			checkCodigo(grupo, codigo, cadena);
-			free(cadena);
-        }else
-			checkCodigo(grupo, codigo, aux);
-
-        return codigo;
 }
 
 /* Comprueba los codigos */
@@ -465,7 +534,9 @@ int checkCodigo(char* grupo, int codigo, char* cadena) {
 	char* aux;
 	char* aux2;
 	switch(codigo){
-		case 0:printf("*** %s \n", cadena);break;
+		case 0:
+			printf("*** %s \n", cadena);
+			break;
         case 1:
                 host = strtok(grupo,":");
                 printf("*** %s (from %s)\n", cadena, host);
@@ -511,6 +582,9 @@ int checkCodigo(char* grupo, int codigo, char* cadena) {
         case 376:break;
         case 412:printf("*** %s \n", cadena);break;
         case 421:printf("*** %s \n", cadena);break;
+        case 432:printf("*** %s \n", cadena);break;
+        case 433:printf("*** %s \n", cadena);break;
+        case 451:printf("*** %s \n", cadena);break;
         default:
 				if(grupo != NULL){
 					printf("*** Unknown message from server with command <%i> \n",codigo);
@@ -544,9 +618,10 @@ int strpos(char* origen, char* substring){
                 if(encontrado == 0){
                         if(origen[i] == substring[j]){
                                 j++;
-                                if(pos == -1){
+                                if(pos == -1)
                                         pos = i;
-                                }else if (j == lengthsub){
+                                /* Antes estaba puesto un else if*/
+                                if (j == lengthsub){
                                         encontrado = 1;
                                 }
                         }else{
@@ -630,7 +705,7 @@ int strrem(char* origen, char** dest, char* substring){
         return pos;
 }
 
-/** Busca la cadena y devuelve la cadena comprendida*/
+/**Busca la cadena y devuelve la subcadena comprendida*/
 /*length es la cadena que se quiere obtener*/
 int strsub(char* origen, char* dest, int posIni, int length){
         dest = calloc(length+posIni+1, sizeof(char));

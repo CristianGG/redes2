@@ -147,7 +147,9 @@ void shell() {
 				} else if (strcmp(palabra.nombre[0],"/join")==0) {
 					if (palabra.cantidad == 2){
 							c_join(palabra.nombre[1]);
-							estado.channelname = palabra.nombre[1];
+
+							estado.channelname = calloc(strlen(palabra.nombre[1]), sizeof(char));
+							strcpy(estado.channelname, palabra.nombre[1]);
 					}else if(palabra.cantidad == 1){
 							if(estado.channel == 1)
 								printf("*** You are on channel %s\n",estado.channelname);
@@ -290,6 +292,10 @@ int main(int argc, char *argv[]){
 							}
                         }
                 }
+                if(quit == 332)
+                	estado.channel = 1;
+                else if(quit == 451)
+                	free(estado.channelname);
         }
 
         printf("Fin \n");

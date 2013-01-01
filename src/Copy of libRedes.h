@@ -9,15 +9,6 @@
 #ifndef LIBREDES_H_
 #define LIBREDES_H_
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <getopt.h>
-#include <ctype.h>
-
-#include <sys/socket.h>
-#include <arpa/inet.h>
 #include <netdb.h>
 
 int c_help();
@@ -29,8 +20,6 @@ int c_auth(char* cadena);
 int c_list();
 
 int c_join(char* cadena);
-
-int c_joinServer(char* cadena);
 
 int c_leave(char* cadena);
 
@@ -44,9 +33,9 @@ int c_info(char* cadena);
 
 int c_msg(char* channelname, char* cadena);
 
-int c_disconnect(fd_set* descriptorLectura);
+int c_disconnect();
 
-int c_quit(fd_set* descriptorLectura);
+int c_quit();
 
 int c_nop(int depurar, char* cadena);
 
@@ -63,8 +52,6 @@ int c_error();
 int recibirMensaje();
 
 int imprimir(char* mensaje);
-
-int parserError(char* mensaje);
 
 int parser(char* mensaje);
 

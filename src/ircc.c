@@ -1,4 +1,4 @@
-#include "libRedes.c"
+#include "libRedes.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,6 +20,19 @@
  *
  * */
 
+
+/* NOTA IMPORTANTE:
+ * El comando shell(), as� como el algoritmo de parseo de argumentos en main()
+ * ha sido tomado de la practica de Sistemas Distribuidos, pero modificandolo
+ * para cumplir los requisitos que se nos piden, ya sea de funcionalidad como
+ * los distintos comandos o de restriccion como el uso de librerias especificas
+ *
+ * El algoritmo de select() ha sido tomado casi en su totalidad del libro Beej
+ * */
+
+
+void shell();
+
 /**
  * Atributos Globales:
  * */
@@ -40,145 +53,379 @@ struct inicio {
     unsigned int debug:1;
 } estado;
 
+struct palabra {
+    int cantidad;
+    char** nombre;
+} palabra;
+
 int serverConnected;
 fd_set descriptorLectura;
+fd_set copia;
 int fdmax;
+int quit;
 
 /**
  * Funciones
  * */
 
-/* Obtiene el host y el port que se le va a pasar por parametro */
-void obtenerHostPort(char* host) {
-	char* aux;
-
-	estado.serv = 1;
-	estado.servername = strtok(host, ":");
-	aux = strtok(NULL, ":");
-	if(aux != NULL){
-		estado.port = aux;
-	}else{
-		estado.serv = 0;
-		estado.servername = NULL;
-		printf("Formato equivocado de <server:port> \n");
-	}
+void usage(char *program_name) {
+        printf("Usage: %s [-s host:port] [-n nick] [-c channel] [-d] \n", program_name);
 }
 
-void c_connect2(fd_set* descriptorLectura ,int* fdmax, char* servername, char* port){
-	int status;
-	struct addrinfo hints, *servinfo;
+/* Obtiene el host y el port que se le va a pasar por parametro */
+void obtenerHostPort(char* host) {
+        char* aux;
 
-	memset(&hints, 0, sizeof hints);
-	hints.ai_family = AF_UNSPEC;
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_flags = AI_PASSIVE;
+        if(strpos(host, ":") != 0){
+        	estado.servername = strtok(host, ":");
 
-	if ((status = getaddrinfo(servername, port, &hints, &servinfo)) != 0) {
-	    fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
-	}
+			aux = strtok(NULL, ":");
+			if(aux != NULL){
+					estado.port = aux;
+			}else{
+					estado.serv = 0;
+					estado.servername = NULL;
+					printf("*** The /connect command also needs a port\n");
+			}
+        }else{
+			estado.serv = 0;
+			estado.servername = NULL;
+        	printf("*** The /connect command also needs a hostname\n");
+        }
+}
 
-	/* Se crea el socket no bloqueante */
-	serverConnected = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
+void shell() {
+        char line[1024];
+		char *pch;
+		char auxLine[1024];
+		char* aux;
+		char** auxArray;
+		int i = 1;
 
-	if(serverConnected < 0){
-		perror("Error creando socket");
-	}
+		memset(line, 0, 1024);
+		pch = fgets(line, 1024, stdin);
+		strcpy(auxLine,line);
 
-	/* Comprueba si se puede conectar */
-	if(connect(serverConnected, servinfo->ai_addr, servinfo->ai_addrlen) <0){
-		fprintf(stderr, "Error en la conexion con el servidor %s:%s", servername, port);
-		exit(-1);
-	}else{
-		printf("*** Connected to server %s:%s", servername, port);
-		FD_SET(serverConnected, descriptorLectura);
-	}
+		if(pch != NULL){
+			if ( (strlen(line)>1) && ((line[strlen(line)-1]=='\n') || (line[strlen(line)-1]=='\r')) )
+				line[strlen(line)-1]='\0';
 
-	if (*fdmax < serverConnected){
-			*fdmax = serverConnected;
-	}
+			aux = strtok(auxLine, " ");
+			if(strcmp(aux, "\n") != 0){
+				palabra.cantidad = 1;
+			}else{
+				palabra.cantidad = 0;
+			}
 
-	freeaddrinfo(servinfo);
+			while(strtok( NULL, " ") != NULL){
+				palabra.cantidad += 1;
+			}
+
+			auxArray = calloc(palabra.cantidad, sizeof(char*));
+			aux = strtok(line, " ");
+			auxArray[0] = aux;
+			while((aux = strtok( NULL, " ")) != NULL){
+					auxArray[i] = aux;
+					i++;
+			}
+
+			palabra.nombre = auxArray;
+
+			if ( (palabra.nombre != NULL) && (palabra.cantidad > 0) ) {
+
+
+				/* COMANDO HELP */
+				if (strcmp(palabra.nombre[0],"/help")==0) {
+					if (palabra.cantidad == 1)
+						c_help();
+					else
+						printf("*** Syntax error. Use: /help\n");
+
+				/* COMANDO CONNECT */
+				} else if (strcmp(palabra.nombre[0],"/connect")==0) {
+					if (palabra.cantidad == 2){
+						if(estado.serv == 0){
+							estado.serv = 1;
+							obtenerHostPort(palabra.nombre[1]);
+							if(estado.serv == 1){
+								estado.serv = c_connect(&serverConnected, &descriptorLectura, &fdmax, estado.servername, estado.port);
+							}
+						}else{
+							printf("*** You are already connected to %s:%s\n", estado.servername, estado.port);
+						}
+					}else
+							printf("*** The /connect command needs a host:port\n");
+
+				/* COMANDO AUTH */
+				} else if (strcmp(palabra.nombre[0],"/auth")==0) {
+					if (palabra.cantidad == 2)
+						if(estado.serv == 1){
+							if(estado.nick == 0)
+								c_auth(palabra.nombre[1]);
+							else
+								printf("*** You are auth \n");
+						}else
+							printf("*** You are not connected to any server\n");
+					else
+							printf("*** You must specify the nickname to use.\n");
+
+				/* COMANDO LIST */
+				} else if (strcmp(palabra.nombre[0],"/list")==0) {
+					if (palabra.cantidad == 1){
+						if(estado.serv == 1){
+							if(estado.nick == 1){
+								c_list();
+							}else
+								printf("*** You are not authenticated in the server\n");
+						}else
+							printf("*** You are not connected to any server\n");
+					}else
+							printf("*** Syntax error. Use: /list\n");
+
+				/* COMANDO JOIN */
+				} else if (strcmp(palabra.nombre[0],"/join")==0) {
+					if (palabra.cantidad == 2){
+						if(estado.serv == 1){
+							if(estado.nick == 1){
+								if(estado.channel == 0){
+									c_join(palabra.nombre[1]);
+
+									estado.channelname = calloc(strlen(palabra.nombre[1]), sizeof(char));
+									strcpy(estado.channelname, palabra.nombre[1]);
+								}else{
+									printf("*** You are on channel %s\n",estado.channelname);
+								}
+							}else
+								printf("*** You are not authenticated in the server\n");
+						}else
+							printf("*** You are not connected to any server\n");
+					}else if(palabra.cantidad == 1){
+							if(estado.channel == 1)
+								printf("*** You are on channel %s\n",estado.channelname);
+							else
+								printf("*** You aren't on channel\n");
+					}else{
+							printf("*** Syntax error. Use: /join [<channel>]\n");
+					}
+
+				/* COMANDO LEAVE */
+				} else if (strcmp(palabra.nombre[0],"/leave")==0) {
+					if (palabra.cantidad == 1){
+						if(estado.channel == 1){
+							c_leave(estado.channelname);
+						}else
+							printf("*** You aren't on channel\n");
+					}else{
+							printf("*** Syntax error. Use: /leave\n");
+					}
+
+				/* COMANDO WHO */
+				} else if (strcmp(palabra.nombre[0],"/who")==0) {
+					if (palabra.cantidad == 1)
+							c_who(estado.channelname);
+					else
+							printf("Syntax error. Use: /who\n");
+
+				/* COMANDO INFO */
+				} else if (strcmp(palabra.nombre[0],"/info")==0) {
+					if (palabra.cantidad == 2){
+							c_info(palabra.nombre[1]);
+					}else
+							printf("*** Syntax error. Use: /info <user>\n");
+
+				/* COMANDO MSG */
+				} else if (strcmp(palabra.nombre[0],"/msg")==0) {
+					if (palabra.cantidad >= 2){
+							if(estado.serv == 1){
+								if(estado.channel == 1){
+									aux = "\0";
+									for(i = 1;  i < palabra.cantidad; i++){
+										aux = strcon(aux, palabra.nombre[i], " ", NULL, NULL);
+									}
+									c_msg(estado.channelname, aux);
+									free(aux);
+								}else
+									printf("*** You aren't on channel\n");
+							}else
+								printf("*** You aren't connected\n");
+					}else
+							printf("*** Syntax error. Use: /msg <text>\n");
+
+				/* COMANDO DISCONNECT */
+				} else if (strcmp(palabra.nombre[0],"/disconnect")==0) {
+					if (palabra.cantidad == 1){
+						if(estado.serv == 1)
+							quit = c_disconnect(&descriptorLectura);
+						else
+							printf("*** You aren't connected\n");
+					}else{
+							printf("*** Syntax error. Use: /disconnect\n");
+					}
+
+				/* COMANDO QUIT */
+				} else if (strcmp(palabra.nombre[0],"/quit")==0) {
+					if (palabra.cantidad == 1){
+						if(estado.serv == 1)
+							quit = c_quit(&descriptorLectura);
+						else
+							quit = -1;
+					} else
+						printf("Syntax error. Use: /quit\n");
+
+				/* COMANDO NOP */
+				} else if (strcmp(palabra.nombre[0],"/nop")==0) {
+					if (palabra.cantidad == 2)
+							c_nop(estado.debug, palabra.nombre[1]);
+					else
+							printf("Syntax error. Use: /nop [<text>]\n");
+
+
+				} else if (strcmp(palabra.nombre[0],"/sleep")==0) {
+					if (palabra.cantidad == 2){
+							c_sleep(estado.debug, palabra.nombre[1]);
+					}else if (palabra.cantidad == 1){
+							c_sleep(estado.debug, "5");
+					}else
+							printf("Syntax error. Use: /sleep [<secs>]\n");
+
+				/* COMANDO MSG */
+				} else if(palabra.cantidad > 0){
+					if(palabra.nombre[0][0] != '\\'){
+						if(estado.serv == 1){
+							if(estado.channel == 1){
+								aux = "\0";
+								for(i = 0;  i < palabra.cantidad; i++){
+									aux = strcon(aux, palabra.nombre[i], " ", NULL, NULL);
+								}
+								c_msg(estado.channelname, aux);
+								free(aux);
+							}else
+								printf("*** You aren't on channel\n");
+						}else
+							printf("*** You aren't connected\n");
+					}
+				}
+			}
+			free(auxArray);
+		}
+
 }
 
 int main(int argc, char *argv[]){
-	int opt;
-	int i;
+		char *program_name = argv[0];
+        int opt;
+        int i;
 
-	printf("Inicio \n");
+        /* Parse command-line arguments */
+        while ((opt = getopt(argc, argv, "n:s:dc:")) != -1) {
+		   switch (opt) {
+				   case 'n':
+						   estado.nick = 1;
+						   estado.nickname = optarg;
+						   break;
+				   case 'd':
+						   estado.debug = 1;
+						   break;
+				   case 's':
+						   estado.serv = 1;
+						   obtenerHostPort(optarg);
+						   break;
+				   case 'c':
+						   estado.channel = 1;
+						   estado.channelname = optarg;
+						   break;
+				   case '?':
+						   if (optopt == 's')
+							fprintf (stderr, "Option -%c requires an argument.\n", optopt);
+						   else if (isprint (optopt))
+							fprintf (stderr, "Unknown option `-%c'.\n", optopt);
+						   else
+							fprintf (stderr, "Unknown option character `\\x%x'.\n", optopt);
+				   default:
+						   usage(program_name);
+						   exit(-1);
+		   }
+        }
 
-	/* Parse command-line arguments */
-	while ((opt = getopt(argc, argv, "n:s:dc:")) != -1) {
-		switch (opt) {
-			case 'n':
-				estado.nick = 1;
-				estado.nickname = optarg;
-				break;
-			case 'd':
-				estado.debug = 1;
-				break;
-			case 's':
-				obtenerHostPort(optarg);
-				break;
-			case 'c':
-				estado.channel = 1;
-				estado.channelname = optarg;
-				break;
-			case '?':
-				if (optopt == 's')
-					fprintf (stderr, "Option -%c requires an argument.\n", optopt);
-				else if (isprint (optopt))
-					fprintf (stderr, "Unknown option `-%c'.\n", optopt);
-				else
-					fprintf (stderr, "Unknown option character `\\x%x'.\n", optopt);
-			default:
-				exit(-1);
-		}
-	}
+        if(estado.debug){
+                printf("MODO DEBUG \n");
+        }
 
-	if(estado.debug){
-		printf("MODO DEBUG \n");
-	}
+        FD_ZERO(&descriptorLectura);
 
-	FD_ZERO(&descriptorLectura);
-	FD_SET(0, &descriptorLectura);
 
-	if(estado.serv){
-		c_connect2(&descriptorLectura, &fdmax, estado.servername, estado.port);
-		printf("Server:%s \n", estado.servername);
-		printf("Port: %s \n", estado.port);
-	}else{
-		fdmax = 0;
-	}
+        if(estado.serv == 1){
+				estado.serv = c_connect(&serverConnected, &descriptorLectura, &fdmax, estado.servername, estado.port);
+                if(estado.serv == 1){
+					if(estado.nick == 1){
+						estado.nick = 0;
+						c_auth(estado.nickname);
+					}
+					quit = recibirMensaje();
+					if(quit == 1){
+						estado.nick = 1;
+						if(estado.channel == 1){
+							estado.channel = 0;
+							c_join(estado.channelname);
+						}
+					}
+                }
+        }else{
+        	fdmax = 0;
+        	estado.channel = 0;
+        	estado.nick = 0;
+        }
 
-	printf("Descriptor socket: %i \n", serverConnected);
-	printf("fdmax: %i \n",fdmax);
-	while(1) {
-		if (select(fdmax+1, &descriptorLectura, NULL, NULL, NULL) == -1) {
-			perror("select");
-			exit(4);
-		}
-		for(i = 0; i <= fdmax; i++) {
+        FD_SET(0, &descriptorLectura);
 
-			if (FD_ISSET(i, &descriptorLectura)) {
-				if (i == 0) {
-					fprintf(stdout, "c> ");
-					printf("Descriptor de la entrada");
-				} else if (i == serverConnected) {
-					printf("Descriptor de la salida");
-				}else{
+        quit = 0;
+        while(quit >= 0) {
+                copia = descriptorLectura;
 
-				}
-			}
-		}
-	}
+                if (select(fdmax+1, &copia, NULL, NULL, NULL) == -1) {
+                        perror("select");
+                        exit(4);
+                }
 
-	printf("Fin \n");
+                for(i = 0; i <= fdmax; i++) {
+                        if (FD_ISSET(i, &copia)) {
+                        	if (i == 0) {
+								shell();
+							} else if (i == serverConnected) {
+								quit = recibirMensaje();
+							}
+                        }
+                }
+                /* COMMAND AUTH*/
+                if(quit == 1)
+                	estado.nick = 1;
+                /* COMMAND JOIN*/
+                else if(quit == 332)
+                	estado.channel = 1;
+                /* COMMAND LEAVE */
+                else if(quit == 451){
+                	estado.channel = 0;
+                	free(estado.channelname);
+                /* ERROR: SERVER DOWN */
+                }else if(quit == 504){
+                	estado.serv = 0;
+                	estado.servername = NULL;
+                	FD_CLR(serverConnected, &descriptorLectura);
 
-	if(estado.serv){
-		printf("%i \n", serverConnected);
-		close(serverConnected);
-		exit(EXIT_SUCCESS);
-	}else{
-		exit(-1);
-	}
+                	estado.nick = 0;
+                	estado.nickname = NULL;
+                	estado.channel = 0;
+                	free(estado.channelname);
+                }
+        }
+
+        if(estado.serv){
+        	if(estado.channel == 1)
+				free(estado.channelname);
+			printf("%i \n", serverConnected);
+			close(serverConnected);
+			exit(EXIT_SUCCESS);
+        }else{
+			exit(-1);
+        }
 }
