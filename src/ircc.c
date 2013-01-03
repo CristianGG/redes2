@@ -23,11 +23,11 @@
 
 /* NOTA IMPORTANTE:
  * El comando shell(), as� como el algoritmo de parseo de argumentos en main()
- * ha sido tomado de la practica de Sistemas Distribuidos, pero modificandolo
- * para cumplir los requisitos que se nos piden, ya sea de funcionalidad como
- * los distintos comandos o de restriccion como el uso de librerias especificas
- *
- * El algoritmo de select() ha sido tomado casi en su totalidad del libro Beej
+ * ha sido tomado de la practica de Sistemas Distribuidos, pero modificandolo casi
+ * en su totalidad para cumplir los requisitos especificos de esta practica,
+ * ya sea de funcionalidad como los distintos comandos o de restriccion de robustez
+ * y el uso de librerias especificas.
+ * El algoritmo de select() ha sido tomado en parte del libro de referencia, Beej.
  * */
 
 
@@ -75,23 +75,26 @@ void usage(char *program_name) {
 /* Obtiene el host y el port que se le va a pasar por parametro */
 void obtenerHostPort(char* host) {
         char* aux;
+		char* aux2;
 
         if(strpos(host, ":") != 0){
-        	estado.servername = strtok(host, ":");
+        	aux = strtok(host, ":");
+			aux2 = strtok(NULL, ":");
 
-			aux = strtok(NULL, ":");
-			if(aux != NULL){
-					estado.port = aux;
-			}else{
+			if(aux2 == NULL){
 					estado.serv = 0;
-					estado.servername = NULL;
 					printf("*** The /connect command also needs a port\n");
 			}
         }else{
 			estado.serv = 0;
-			estado.servername = NULL;
         	printf("*** The /connect command also needs a hostname\n");
         }
+
+        estado.servername = calloc(strlen(aux), sizeof(char));
+        estado.port  = calloc(strlen(aux2), sizeof(char));
+
+        strcpy(estado.servername, aux);
+        strcpy(estado.port, aux2);
 }
 
 void shell() {
@@ -193,7 +196,7 @@ void shell() {
 									estado.channelname = calloc(strlen(palabra.nombre[1]), sizeof(char));
 									strcpy(estado.channelname, palabra.nombre[1]);
 								}else{
-									printf("*** You are on channel %s\n",estado.channelname);
+									printf("*** You are already in channel %s. Leave the channel and try again\n",estado.channelname);
 								}
 							}else
 								printf("*** You are not authenticated in the server\n");
@@ -201,7 +204,7 @@ void shell() {
 							printf("*** You are not connected to any server\n");
 					}else if(palabra.cantidad == 1){
 							if(estado.channel == 1)
-								printf("*** You are on channel %s\n",estado.channelname);
+								printf("*** You are in channel %s\n",estado.channelname);
 							else
 								printf("*** You aren't on channel\n");
 					}else{
@@ -211,43 +214,70 @@ void shell() {
 				/* COMANDO LEAVE */
 				} else if (strcmp(palabra.nombre[0],"/leave")==0) {
 					if (palabra.cantidad == 1){
-						if(estado.channel == 1){
-							c_leave(estado.channelname);
+						if(estado.serv == 1){
+							if(estado.nick == 1){
+								if(estado.channel == 1){
+									c_leave(estado.channelname);
+								}else
+									printf("*** You are not in any channel\n");
+							}else
+								printf("*** You are not authenticated in the server\n");
 						}else
-							printf("*** You aren't on channel\n");
+							printf("*** You are not connected to any server\n");
 					}else{
 							printf("*** Syntax error. Use: /leave\n");
 					}
 
 				/* COMANDO WHO */
 				} else if (strcmp(palabra.nombre[0],"/who")==0) {
-					if (palabra.cantidad == 1)
-							c_who(estado.channelname);
-					else
+					if (palabra.cantidad == 1){
+						if(estado.serv == 1){
+							if(estado.nick == 1){
+								if(estado.channel == 1){
+									c_who(estado.channelname);
+								}else
+									printf("*** You are not in any channel\n");
+							}else
+								printf("*** You are not authenticated in the server\n");
+						}else
+							printf("*** You are not connected to any server\n");
+					}else
 							printf("Syntax error. Use: /who\n");
 
 				/* COMANDO INFO */
 				} else if (strcmp(palabra.nombre[0],"/info")==0) {
-					if (palabra.cantidad == 2){
-							c_info(palabra.nombre[1]);
+					if(estado.serv == 1){
+						if(estado.nick == 1){
+							if(estado.channel == 1){
+								if (palabra.cantidad == 2){
+									c_info(palabra.nombre[1]);
+								}else
+									printf("*** You must specify the nickname of the user.\n");
+							}else
+								printf("*** You are not in any channel\n");
+						}else
+							printf("*** You are not authenticated in the server\n");
 					}else
-							printf("*** Syntax error. Use: /info <user>\n");
+						printf("*** You are not connected to any server\n");
 
 				/* COMANDO MSG */
 				} else if (strcmp(palabra.nombre[0],"/msg")==0) {
 					if (palabra.cantidad >= 2){
 							if(estado.serv == 1){
-								if(estado.channel == 1){
-									aux = "\0";
-									for(i = 1;  i < palabra.cantidad; i++){
-										aux = strcon(aux, palabra.nombre[i], " ", NULL, NULL);
-									}
-									c_msg(estado.channelname, aux);
-									free(aux);
+								if(estado.nick == 1){
+									if(estado.channel == 1){
+										aux = "\0";
+										for(i = 1;  i < palabra.cantidad; i++){
+											aux = strcon(aux, palabra.nombre[i], " ", NULL, NULL);
+										}
+										c_msg(estado.channelname, aux);
+										free(aux);
+									}else
+										printf("*** You are not in any channel\n");
 								}else
-									printf("*** You aren't on channel\n");
+									printf("*** You are not authenticated in the server\n");
 							}else
-								printf("*** You aren't connected\n");
+								printf("*** You are not connected to any server\n");
 					}else
 							printf("*** Syntax error. Use: /msg <text>\n");
 
@@ -255,9 +285,9 @@ void shell() {
 				} else if (strcmp(palabra.nombre[0],"/disconnect")==0) {
 					if (palabra.cantidad == 1){
 						if(estado.serv == 1)
-							quit = c_disconnect(&descriptorLectura);
+							quit = c_disconnect(&descriptorLectura, estado.servername, estado.port);
 						else
-							printf("*** You aren't connected\n");
+							printf("*** You are not connected to any server\n");
 					}else{
 							printf("*** Syntax error. Use: /disconnect\n");
 					}
@@ -269,6 +299,7 @@ void shell() {
 							quit = c_quit(&descriptorLectura);
 						else
 							quit = -1;
+						printf("*** Bye!\n");
 					} else
 						printf("Syntax error. Use: /quit\n");
 
@@ -290,19 +321,24 @@ void shell() {
 
 				/* COMANDO MSG */
 				} else if(palabra.cantidad > 0){
-					if(palabra.nombre[0][0] != '\\'){
+					if(palabra.nombre[0][0] != '/'){
 						if(estado.serv == 1){
-							if(estado.channel == 1){
-								aux = "\0";
-								for(i = 0;  i < palabra.cantidad; i++){
-									aux = strcon(aux, palabra.nombre[i], " ", NULL, NULL);
-								}
-								c_msg(estado.channelname, aux);
-								free(aux);
+							if(estado.nick == 1){
+								if(estado.channel == 1){
+									aux = "\0";
+									for(i = 0;  i < palabra.cantidad; i++){
+										aux = strcon(aux, palabra.nombre[i], " ", NULL, NULL);
+									}
+									c_msg(estado.channelname, aux);
+									free(aux);
+									}else
+										printf("*** You are not in any channel\n");
 							}else
-								printf("*** You aren't on channel\n");
+								printf("*** You are not authenticated in the server\n");
 						}else
-							printf("*** You aren't connected\n");
+							printf("*** You are not connected to any server\n");
+					}else{
+						printf("*** %s is not a valid command. Type /help to see a list of available commands.\n", palabra.nombre[0]);
 					}
 				}
 			}
@@ -335,10 +371,10 @@ int main(int argc, char *argv[]){
 						   estado.channelname = optarg;
 						   break;
 				   case '?':
-						   if (optopt == 's')
-							fprintf (stderr, "Option -%c requires an argument.\n", optopt);
-						   else if (isprint (optopt))
-							fprintf (stderr, "Unknown option `-%c'.\n", optopt);
+						   if (optopt == 's'){
+							   fprintf (stderr, "*** Option -%c needs a host:port.\n", optopt);
+						   }else if (isprint (optopt))
+							fprintf (stderr, "*** Unknown option `-%c'.\n", optopt);
 						   else
 							fprintf (stderr, "Unknown option character `\\x%x'.\n", optopt);
 				   default:
@@ -360,8 +396,8 @@ int main(int argc, char *argv[]){
 					if(estado.nick == 1){
 						estado.nick = 0;
 						c_auth(estado.nickname);
+						quit = recibirMensaje();
 					}
-					quit = recibirMensaje();
 					if(quit == 1){
 						estado.nick = 1;
 						if(estado.channel == 1){
@@ -404,28 +440,56 @@ int main(int argc, char *argv[]){
                 	estado.channel = 1;
                 /* COMMAND LEAVE */
                 else if(quit == 451){
-                	estado.channel = 0;
-                	free(estado.channelname);
+                	/* Sin la 2a comprobacion si se escribe muy rapido 2 veces el comando peta dando un error de doble free,
+                	 * en la teoria no deberia entrar pero lo hace y depurando no entra dos veces en el comando leave, pero recibe dos 451
+                	 * */
+                	if(estado.channel == 1){
+                		estado.channel = 0;
+                		free(estado.channelname);
+                	}
                 /* ERROR: SERVER DOWN */
                 }else if(quit == 504){
                 	estado.serv = 0;
-                	estado.servername = NULL;
+                	free(estado.servername);
+                	free(estado.port);
                 	FD_CLR(serverConnected, &descriptorLectura);
+                	close(serverConnected);
 
-                	estado.nick = 0;
-                	estado.nickname = NULL;
-                	estado.channel = 0;
-                	free(estado.channelname);
+                	if(estado.nick == 1){
+                		estado.nick = 0;
+						estado.nickname = NULL;
+                	}
+                	if(estado.channel == 1){
+                		estado.channel = 0;
+						free(estado.channelname);
+                	}
+                /* COMMAND DISCONNECT */
+                }else if(quit == 505){
+                	estado.serv = 0;
+                	free(estado.servername);
+                	free(estado.port);
+
+                	if(estado.nick == 1){
+                		estado.nick = 0;
+						estado.nickname = NULL;
+                	}
+                	if(estado.channel == 1){
+                		estado.channel = 0;
+						free(estado.channelname);
+                	}
                 }
         }
 
-        if(estado.serv){
-        	if(estado.channel == 1)
-				free(estado.channelname);
-			printf("%i \n", serverConnected);
-			close(serverConnected);
-			exit(EXIT_SUCCESS);
-        }else{
-			exit(-1);
+        /* Liberar memoria */
+       	if(estado.channel == 1)
+			free(estado.channelname);
+
+        if(estado.serv == 1){
+        	free(estado.servername);
+			free(estado.port);
         }
+		exit(EXIT_SUCCESS);
+
+
+
 }

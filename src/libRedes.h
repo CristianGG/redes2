@@ -44,7 +44,7 @@ int c_info(char* cadena);
 
 int c_msg(char* channelname, char* cadena);
 
-int c_disconnect(fd_set* descriptorLectura);
+int c_disconnect(fd_set* descriptorLectura, char* channelname, char* port);
 
 int c_quit(fd_set* descriptorLectura);
 

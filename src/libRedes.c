@@ -12,8 +12,10 @@
 
 
 int serverConnected;
-char* host;
+char* channelname;
 int quit = 0;
+int channel = 0;
+char* host;
 
 int c_help(){
         printf(
@@ -148,6 +150,10 @@ int c_join(char* cadena){
         if(cadena != NULL){
 			mensaje = "JOIN ";
 
+			channel = 1;
+			channelname = calloc(strlen(cadena), sizeof(char));
+			strcpy(channelname, cadena);
+
 			mensaje = strcon(mensaje, cadena, "\r\n", NULL, NULL);
 			length = strlen(mensaje);
 			enviar(mensaje, length);
@@ -168,6 +174,11 @@ int c_leave(char* cadena){
 		enviar(mensaje, length);
 
 		free(mensaje);
+
+		if(channel == 1){
+			free(channelname);
+			channel = 0;
+		}
 
 		return 1;
 }
@@ -218,7 +229,7 @@ int c_msg(char* channelname, char* cadena){
 		return 1;
 }
 
-int c_disconnect(fd_set* descriptorLectura){
+int c_disconnect(fd_set* descriptorLectura, char* host, char* port){
 		char* mensaje;
 		int length;
 
@@ -230,10 +241,16 @@ int c_disconnect(fd_set* descriptorLectura){
 		quit = 0;
 
 		FD_CLR(serverConnected, descriptorLectura);
+		close(serverConnected);
 
-		printf("*** Disconnected from server\n");
+		printf("*** Disconnected from server %s:%s\n", host, port);
 
-		return quit;
+		if(channel == 1){
+			free(channelname);
+			channel = 0;
+		}
+
+		return 505;
 }
 
 int c_quit(fd_set* descriptorLectura){
@@ -248,8 +265,12 @@ int c_quit(fd_set* descriptorLectura){
 		quit = -1;
 
 		FD_CLR(serverConnected, descriptorLectura);
+		close(serverConnected);
 
-		printf("*** bye!\n");
+		if(channel == 1){
+			free(channelname);
+			channel = 0;
+		}
 
 		return quit;
 }
@@ -489,7 +510,7 @@ int parser(char* mensaje) {
 				strtok(NULL, " ");
 				grupo = strtok(NULL, " ");
 				aux = strtok(NULL, " ");
-			}else if(codigo == 322){
+			}else if(codigo == 322 || codigo == 401){
 				strtok(NULL, " ");
 				grupo = strtok(NULL, " ");
 				aux = strtok(NULL, "\r\n");
@@ -512,7 +533,7 @@ int parser(char* mensaje) {
 			}
 			pos = strrem(aux, &cadena, "\r\n");
 
-			if(codigo > 200 && codigo != 311 && codigo != 317 && codigo != 322 && codigo != 332 && codigo != 353 && codigo != 352){
+			if(codigo > 200 && codigo != 311 && codigo != 317 && codigo != 322 && codigo != 332 && codigo != 353 && codigo != 352 && codigo != 401){
 				grupo = NULL;
 			}
 
@@ -580,11 +601,13 @@ int checkCodigo(char* grupo, int codigo, char* cadena) {
         		printf("*** %s \n", cadena);break;
         /* Final del connect, CONNECT*/
         case 376:break;
+        case 401:printf("*** %s is not in channel %s\n", grupo, channelname);break;
         case 412:printf("*** %s \n", cadena);break;
         case 421:printf("*** %s \n", cadena);break;
         case 432:printf("*** %s \n", cadena);break;
         case 433:printf("*** %s \n", cadena);break;
         case 451:printf("*** %s \n", cadena);break;
+        case 474:printf("*** The channel does not exist");break;
         default:
 				if(grupo != NULL){
 					printf("*** Unknown message from server with command <%i> \n",codigo);
