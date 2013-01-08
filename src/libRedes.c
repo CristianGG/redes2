@@ -12,8 +12,10 @@
 
 
 int serverConnected;
+char* nickname;
 char* channelname;
 int quit = 0;
+int nick = 0;
 int channel = 0;
 char* host;
 
@@ -78,7 +80,6 @@ int c_connect(int* serverConnected2, fd_set* descriptorLectura ,int* fdmax, char
 
         if ((status = getaddrinfo(servername, port, &hints, &servinfo)) != 0) {
             fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
-
         }
 
         /* Se crea el socket no bloqueante */
@@ -90,7 +91,8 @@ int c_connect(int* serverConnected2, fd_set* descriptorLectura ,int* fdmax, char
 
         /* Comprueba si se puede conectar */
         if(connect(*serverConnected2, servinfo->ai_addr, servinfo->ai_addrlen) <0){
-                fprintf(stderr, "*** Unable to connect to server %s:%s", servername, port);
+                fprintf(stderr, "*** Unable to connect to server %s:%s\n", servername, port);
+                freeaddrinfo(servinfo);
                 return 0;
         }else{
                 printf("*** Connected to server %s:%s \n", servername, port);
@@ -111,22 +113,24 @@ int c_auth(char* cadena){
         char* mensaje;
         int length;
 
-
-
         mensaje = "NICK ";
 
-        mensaje = strcon(mensaje, cadena, "\r\n", NULL, NULL);
+        mensaje = strcon(mensaje, cadena, "\r\n\0", NULL, NULL);
         length = strlen(mensaje);
         enviar(mensaje, length);
 
         free(mensaje);
 
         mensaje = "USER ";
-        mensaje = strcon(mensaje, cadena, " 0 * :", cadena, "\r\n");
+        mensaje = strcon(mensaje, cadena, " 0 * :", cadena, "\r\n\0");
         length = strlen(mensaje);
         enviar(mensaje, length);
 
         free(mensaje);
+
+		nick = 1;
+		nickname = calloc(strlen(cadena)+1, sizeof(char));
+		strcpy(nickname, cadena);
 
         return 1;
 }
@@ -151,10 +155,10 @@ int c_join(char* cadena){
 			mensaje = "JOIN ";
 
 			channel = 1;
-			channelname = calloc(strlen(cadena), sizeof(char));
+			channelname = calloc(strlen(cadena)+1, sizeof(char));
 			strcpy(channelname, cadena);
 
-			mensaje = strcon(mensaje, cadena, "\r\n", NULL, NULL);
+			mensaje = strcon(mensaje, cadena, "\r\n\0", NULL, NULL);
 			length = strlen(mensaje);
 			enviar(mensaje, length);
 
@@ -169,7 +173,7 @@ int c_leave(char* cadena){
 
 		mensaje = "PART ";
 
-		mensaje = strcon(mensaje, cadena, "\r\n", NULL, NULL);
+		mensaje = strcon(mensaje, cadena, "\r\n\0", NULL, NULL);
 		length = strlen(mensaje);
 		enviar(mensaje, length);
 
@@ -189,7 +193,7 @@ int c_who(char* cadena){
 
 		mensaje = "WHO ";
 
-		mensaje = strcon(mensaje, cadena, "\r\n", NULL, NULL);
+		mensaje = strcon(mensaje, cadena, "\r\n\0", NULL, NULL);
 		length = strlen(mensaje);
 		enviar(mensaje, length);
 
@@ -204,7 +208,7 @@ int c_info(char* cadena){
 
 		mensaje = "WHOIS ";
 
-		mensaje = strcon(mensaje, cadena, "\r\n", NULL, NULL);
+		mensaje = strcon(mensaje, cadena, "\r\n\0", NULL, NULL);
 		length = strlen(mensaje);
 		enviar(mensaje, length);
 
@@ -219,7 +223,7 @@ int c_msg(char* channelname, char* cadena){
 
 		mensaje = "PRIVMSG ";
 
-		mensaje = strcon(mensaje, channelname, " :", cadena, "\r\n");
+		mensaje = strcon(mensaje, channelname, " :", cadena, "\r\n\0");
 		length = strlen(mensaje);
 		enviar(mensaje, length);
 
@@ -249,7 +253,10 @@ int c_disconnect(fd_set* descriptorLectura, char* host, char* port){
 			free(channelname);
 			channel = 0;
 		}
-
+		if(nick == 1){
+			nick = 0;
+			free(nickname);
+		}
 		return 505;
 }
 
@@ -268,8 +275,12 @@ int c_quit(fd_set* descriptorLectura){
 		close(serverConnected);
 
 		if(channel == 1){
-			free(channelname);
 			channel = 0;
+			free(channelname);
+		}
+		if(nick == 1){
+			nick = 0;
+			free(nickname);
 		}
 
 		return quit;
@@ -317,7 +328,7 @@ int c_pong(char* cadena){
 
         mensaje = "PONG ";
 
-        mensaje = strcon(mensaje, aux, "\r\n", NULL, NULL);
+        mensaje = strcon(mensaje, aux, "\r\n\0", NULL, NULL);
         length = strlen(mensaje);
         enviar(mensaje, length);
 
@@ -427,8 +438,17 @@ int recibirMensaje() {
         }else if(c_error(mensaje) == 1){
         	if(quit == 0){
         		tipo = parserError(mensaje);
-        	}else
+        	}else{
+        		if(channel == 1){
+        			channel = 0;
+        			free(channelname);
+        		}
+        		if(nick == 1){
+        			nick = 0;
+        			free(nickname);
+        		}
         		tipo = -1;
+        	}
         }else if(c_privmsg(mensaje) == 1){
         	tipo = imprimir(mensaje);
         }else
@@ -463,9 +483,13 @@ int c_leaveMsg(char* mensaje){
 	channel = strtok(NULL, ":");
 	name = strtok(NULL, "\r");
 
-	printf("*** %s has left channel %s \n", name, channel);
-
-	return 451;
+	if(strcmp(name, nickname) == 0){
+		printf("***You have left channel %s \n", channel);
+		return 506;
+	}else{
+		printf("*** %s has left channel %s \n", name, channel);
+		return 0;
+	}
 }
 
 int parserError(char* mensaje) {
@@ -475,6 +499,15 @@ int parserError(char* mensaje) {
 		printf("*** Connection to IRC server lost. Try to connect again in a few minutes\n");
 		return 504;
 	}
+	if(channel == 1){
+		channel = 0;
+		free(channelname);
+	}
+	if(nick == 1){
+		nick = 0;
+		free(nickname);
+	}
+
 	return 0;
 }
 
@@ -484,8 +517,6 @@ int parser(char* mensaje) {
         char* cadena;
         char* aux;
         int pos;
-
-        printf("%s \n", mensaje);
 
         grupo = strtok(mensaje, " ");
         if(grupo != NULL){
@@ -538,14 +569,22 @@ int parser(char* mensaje) {
 			}
 
 			if(pos > 0){
-				checkCodigo(grupo, codigo, cadena);
+				codigo = checkCodigo(grupo, codigo, cadena);
 				free(cadena);
 			}else
-				checkCodigo(grupo, codigo, aux);
+				codigo = checkCodigo(grupo, codigo, aux);
 
 			return codigo;
         }else{
-        	printf("*** Problem with the message's server. Exit\n");
+        	printf("*** Problem with the server. Exit\n");
+        	if(channel == 1){
+        		channel = 0;
+        		free(channelname);
+        	}
+        	if(nick == 1){
+        		nick = 0;
+        		free(nickname);
+        	}
         	return -1;
         }
 }
@@ -604,9 +643,13 @@ int checkCodigo(char* grupo, int codigo, char* cadena) {
         case 401:printf("*** %s is not in channel %s\n", grupo, channelname);break;
         case 412:printf("*** %s \n", cadena);break;
         case 421:printf("*** %s \n", cadena);break;
-        case 432:printf("*** %s \n", cadena);break;
-        case 433:printf("*** %s \n", cadena);break;
-        case 451:printf("*** %s \n", cadena);break;
+        case 432:printf("*** %s \n", cadena);nick = 0; free(nickname);break;
+        case 433:printf("*** %s \n", cadena);nick = 0; free(nickname);break;
+        case 451:
+
+        		printf("*** %s \n", cadena);
+				break;
+        case 461:printf("*** You must specify the nickname to use");nick = 0; free(nickname);break;
         case 474:printf("*** The channel does not exist");break;
         default:
 				if(grupo != NULL){
@@ -617,7 +660,7 @@ int checkCodigo(char* grupo, int codigo, char* cadena) {
 				break;
         }
 
-	return 1;
+	return codigo;
 }
 
 /* Obtiene la ip a traves de su hostname */

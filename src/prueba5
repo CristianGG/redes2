@@ -1,0 +1,52 @@
+/connect
+/sleep 1
+
+
+
+/connect localhost
+/sleep 1
+
+
+
+/connect :7777
+/sleep 1
+
+
+
+/connect localhost:6666
+/sleep 1
+
+
+
+/connect localhost 7777
+/sleep 1
+
+
+
+/connect localhost:7777
+/sleep 1
+
+
+
+/connect monitor05.lab.it.uc3m.es:7101
+/sleep 60
+
+/auth user1
+/sleep 1
+
+
+
+
+/connect monitor05.lab.it.uc3m.es:7101
+/sleep 1
+
+/disconnect
+/sleep 1
+
+/connect monitor05.lab.it.uc3m.es:7101
+/sleep 1
+
+/connect localhost:7101
+/sleep 1
+
+/quit
