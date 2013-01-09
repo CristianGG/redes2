@@ -32,6 +32,8 @@ int c_join(char* cadena);
 
 int c_joinServer(char* cadena);
 
+int c_joinMsg(char* cadena);
+
 int c_leave(char* cadena);
 
 int c_leaveServer(char* cadena);
@@ -64,19 +66,21 @@ int c_pong();
 
 int c_error();
 
-int recibirMensaje();
+int recibirMensaje(fd_set* descriptorLectura);
 
 int imprimir(char* mensaje);
 
 int parserError(char* mensaje);
 
-int parser(char* mensaje);
+int parser(char* mensaje, fd_set* descriptorLectura);
 
 char* obtenerIpServer(char* server);
 
 int enviar(char* mensaje, int length);
 
 int recibir(char** mensaje);
+
+int liberar(fd_set* descriptorLectura);
 
 int checkCodigo(char* mensaje, int codigo, char* cadena);
 

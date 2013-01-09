@@ -114,6 +114,7 @@ void shell() {
 		char* aux;
 		char** auxArray;
 		int i = 1;
+		char* msg;
 
 		memset(line, 0, 1024);
 		pch = fgets(line, 1024, stdin);
@@ -283,9 +284,12 @@ void shell() {
 							if(estado.serv == 1){
 								if(estado.nick == 1){
 									if(estado.channel == 1){
-										aux = "\0";
-										for(i = 1;  i < palabra.cantidad; i++){
-											aux = strcon(aux, palabra.nombre[i], " \0", NULL, NULL);
+										aux = calloc(1, sizeof(char));
+										for(i = 1;  i <= palabra.cantidad; i++){
+											msg = strcon(aux, palabra.nombre[i], " \0", NULL, NULL);
+					                        aux = calloc(strlen(msg)+1, sizeof(char));
+					                        strcpy(aux, msg);
+					                        free(msg);
 										}
 										c_msg(estado.channelname, aux);
 										free(aux);
@@ -342,14 +346,18 @@ void shell() {
 						if(estado.serv == 1){
 							if(estado.nick == 1){
 								if(estado.channel == 1){
-									aux = "\0";
+									aux = calloc(1, sizeof(char));
 									for(i = 0;  i < palabra.cantidad; i++){
-										aux = strcon(aux, palabra.nombre[i], " \0", NULL, NULL);
+										msg = strcon(aux, palabra.nombre[i], " \0", NULL, NULL);
+										free(aux);
+				                        aux = calloc(strlen(msg)+1, sizeof(char));
+				                        strcpy(aux, msg);
+				                        free(msg);
 									}
 									c_msg(estado.channelname, aux);
 									free(aux);
-									}else
-										printf("*** You are not in any channel\n");
+								}else
+									printf("*** You are not in any channel\n");
 							}else
 								printf("*** You are not authenticated in the server\n");
 						}else
@@ -381,13 +389,13 @@ int init(char* nickname, char* channelname, int error){
 						strcpy(estado.nickname, nickname);
 
 						c_auth(estado.nickname);
-						quit = recibirMensaje();
+						quit = recibirMensaje(&descriptorLectura);
 						/*Comprueba que se ha dado el mensaje recibido correcto*/
 						if(quit == 1){
 							estado.nick = 1;
 
 							for(i = 0; i < 14; i++){
-								recibirMensaje();
+								recibirMensaje(&descriptorLectura);
 							}
 
 							if(error != 2){
@@ -397,21 +405,23 @@ int init(char* nickname, char* channelname, int error){
 									strcpy(estado.channelname, channelname);
 
 									c_join(estado.channelname);
-									quit = recibirMensaje();
-									printf("%i \n",quit);
+									quit = recibirMensaje(&descriptorLectura);
+
 									comprobarComando();
 								}
 							}else{
 								printf("*** You must specify a channel\n");
 							}
 						}else{
+							if(estado.channel == 1)
+								printf("*** You are not authenticated in the server\n");
+
 							estado.nick = 0;
 							estado.channel = 0;
 
 							free(estado.nickname);
 
-							if(estado.channel == 1)
-								printf("*** You are not authenticated in the server\n");
+
 						}
 					}
 				}else if(error == 1){
@@ -419,8 +429,8 @@ int init(char* nickname, char* channelname, int error){
 					estado.channel = 0;
 				}
 				if(estado.channel == 1){
-					estado.channel = 0;
 					printf("*** You are not authenticated in the server\n");
+					estado.channel = 0;
 				}
             }else{
             	/* Si no se puede conectar al servidor*/
@@ -432,10 +442,10 @@ int init(char* nickname, char* channelname, int error){
             }
     }else{
     	fdmax = 0;
-    	estado.channel = 0;
-       	estado.nick = 0;
     	if(estado.channel == 1 || estado.nick == 1)
     		printf("*** You are not connected to any server.\n");
+    	estado.channel = 0;
+       	estado.nick = 0;
     }
 
     if(estado.debug == 1){
@@ -486,12 +496,13 @@ void comprobarComando(){
 				estado.channel = 0;
 				free(estado.channelname);
 			}
-		/* COMMAND DISCONNECT */
+		/* COMMAND DISCONNECT // CLOSED */
 		}else if(quit == 505){
-			estado.serv = 0;
-			free(estado.servername);
-			free(estado.port);
-
+			if(estado.serv == 1){
+				estado.serv = 0;
+				free(estado.servername);
+				free(estado.port);
+			}
 			if(estado.nick == 1){
 				estado.nick = 0;
 				free(estado.nickname);
@@ -510,6 +521,14 @@ void comprobarComando(){
 				free(estado.channelname);
 			}
 		}
+
+		quit = 0;
+
+	    if(estado.debug == 1){
+			printf("%i \n",estado.serv);
+			printf("%i \n",estado.nick);
+			printf("%i \n",estado.channel);
+	    }
 }
 
 int main(int argc, char *argv[]){
@@ -589,12 +608,13 @@ int main(int argc, char *argv[]){
                         	if (i == 0) {
 								shell();
 							} else if (i == serverConnected) {
-								quit = recibirMensaje();
+								quit = recibirMensaje(&descriptorLectura);
 							}
                         }
                 }
 
-                comprobarComando();
+                if(quit > 0)
+                	comprobarComando();
         }
 
         /* Liberar memoria */

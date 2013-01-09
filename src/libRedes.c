@@ -335,7 +335,7 @@ int c_pong(char* cadena){
 
         free(mensaje);
 
-        return 1;
+        return 0;
 }
 
 int c_error(char* cadena){
@@ -373,6 +373,12 @@ int c_quitServer(char* cadena){
                 return 0;
 }
 
+int c_closedServer(char* cadena){
+        if(strcmp(cadena, "\0") == 0)
+                return 1;
+        else
+                return 0;
+}
 
 /* Envia al servidor los datos */
 int enviar(char* mensaje, int length) {
@@ -433,15 +439,19 @@ int recibir(char** mensaje) {
 }
 
 /* Recibe del servidor los datos */
-int recibirMensaje() {
+int recibirMensaje(fd_set* descriptorLectura) {
 		int tipo;
         char* mensaje = NULL;
         recibir(&mensaje);
 
         if(c_pingServer((mensaje)) == 1){
             tipo = c_pong(mensaje);
+        }else if(c_closedServer(mensaje) == 1){
+    		printf("*** Closed connection from server \n");
+        	liberar(descriptorLectura);
+        	tipo = 505;
         }else if(c_joinServer(mensaje) == 1){
-            tipo = c_pong(mensaje);
+            tipo = c_joinMsg(mensaje);
         }else if(c_quitServer(mensaje) == 1){
             tipo = c_quitMsg(mensaje);
         }else if(c_leaveServer(mensaje) == 1){
@@ -464,7 +474,7 @@ int recibirMensaje() {
         }else if(c_privmsg(mensaje) == 1){
         	tipo = imprimir(mensaje);
         }else
-        	tipo = parser(mensaje);
+        	tipo = parser(mensaje, descriptorLectura);
         free(mensaje);
 
        	return tipo;
@@ -477,12 +487,30 @@ int imprimir(char* mensaje) {
 
 		aux = strtok(mensaje, "!");
 		strtok(NULL, ":");
-		cadena = strtok(NULL, ":");
+		cadena = strtok(NULL, "\r");
 		strrem(aux, &user, ":");
 		printf("<%s> %s\n", user, cadena);
 
 		free(user);
 		return 0;
+}
+
+int c_joinMsg(char* mensaje){
+	char* name;
+	char* channel;
+	char* aux;
+	int codigo;
+
+	aux = strtok(mensaje, "!");
+	strtok(NULL, ":");
+	channel = strtok(NULL, "\r");
+	strrem(aux, &name, ":");
+
+	printf("*** %s has joined channel %s \n", name, channel);
+	codigo = 0;
+
+	free(name);
+	return codigo;
 }
 
 int c_leaveMsg(char* mensaje){
@@ -512,11 +540,9 @@ int c_quitMsg(char* mensaje){
 	char* aux;
 	int codigo;
 
-	printf("%s \n", mensaje);
-
 	aux = strtok(mensaje, "!");
 	strtok(NULL, ":");
-	cadena = strtok(NULL, ":");
+	cadena = strtok(NULL, "r");
 	strrem(aux, &name, ":");
 
 	if(strcmp(name, nickname) == 0){
@@ -532,10 +558,8 @@ int c_quitMsg(char* mensaje){
 }
 
 int parserError(char* mensaje) {
-
-	printf("%s \n", mensaje);
 	if(strstr(mensaje, "down") != NULL){
-		printf("*** Connection to IRC server lost. Try to connect again in a few minutes\n");
+		fprintf(stderr,"*** Connection to IRC server lost. Try to connect again in a few minutes\n");
 		return 504;
 	}
 	if(channel == 1){
@@ -550,14 +574,12 @@ int parserError(char* mensaje) {
 	return 0;
 }
 
-int parser(char* mensaje) {
+int parser(char* mensaje, fd_set* descriptorLectura) {
         char* grupo;
         int codigo;
         char* cadena;
         char* aux;
         int pos;
-
-        printf("%s \n",mensaje);
 
         grupo = strtok(mensaje, " ");
         if(grupo != NULL){
@@ -617,17 +639,26 @@ int parser(char* mensaje) {
 
 			return codigo;
         }else{
-        	printf("*** Problem with the server. Exit\n");
-        	if(channel == 1){
-        		channel = 0;
-        		free(channelname);
-        	}
-        	if(nick == 1){
-        		nick = 0;
-        		free(nickname);
-        	}
+        	printf("*** Problem with the parser. Exit\n");
+        	liberar(descriptorLectura);
         	return -1;
         }
+}
+
+int liberar(fd_set* descriptorLectura){
+	FD_CLR(serverConnected, descriptorLectura);
+	close(serverConnected);
+
+	if(channel == 1){
+		channel = 0;
+		free(channelname);
+	}
+	if(nick == 1){
+		nick = 0;
+		free(nickname);
+	}
+
+	return 0;
 }
 
 /* Comprueba los codigos */
@@ -669,7 +700,7 @@ int checkCodigo(char* grupo, int codigo, char* cadena) {
         case 332:
 				aux = strtok(cadena, ":");
 				aux2 = strtok(NULL, ":");
-				printf("*** %s are on channel %s \n", grupo, aux);
+				/*printf("*** %s are on channel %s \n", grupo, aux);*/
 				printf("*** Topic for %s: %s \n", aux, aux2);
 				break;
         case 352:printf("*** %s \t %s\n", grupo, cadena);break;
