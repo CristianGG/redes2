@@ -20,6 +20,10 @@
  *
  * */
 
+int init(char* nickname, char* channelname, int error);
+void comprobarComando();
+void shell();
+void obtenerHostPort(char* host, int opcion);
 
 /* NOTA IMPORTANTE:
  * El comando shell(), as� como el algoritmo de parseo de argumentos en main()
@@ -31,7 +35,7 @@
  * */
 
 
-void shell();
+
 
 /**
  * Atributos Globales:
@@ -219,7 +223,7 @@ void shell() {
 							if(estado.channel == 1)
 								printf("*** You are in channel %s\n",estado.channelname);
 							else
-								printf("*** You aren't on channel\n");
+								printf("*** You are not in any channel\n");
 					}else{
 							printf("*** Syntax error. Use: /join [<channel>]\n");
 					}
@@ -360,15 +364,164 @@ void shell() {
 
 }
 
+int init(char* nickname, char* channelname, int error){
+	int i = 0;
+
+	/*Si se han dado ya los nombres del servidor*/
+    if(estado.serv == 1){
+			estado.serv = c_connect(&serverConnected, &descriptorLectura, &fdmax, estado.servername, estado.port);
+            /* Si se ha conectado al servidor*/
+			if(estado.serv == 1){
+				/*Si ha habido un error al introducir el nick*/
+				if(error == 0 || error == 2){
+					/*Si se le ha dado un nick de entrada*/
+					if(estado.nick == 1){
+						estado.nick = 0;
+						estado.nickname = calloc(strlen(nickname)+1, sizeof(char));
+						strcpy(estado.nickname, nickname);
+
+						c_auth(estado.nickname);
+						quit = recibirMensaje();
+						/*Comprueba que se ha dado el mensaje recibido correcto*/
+						if(quit == 1){
+							estado.nick = 1;
+
+							for(i = 0; i < 14; i++){
+								recibirMensaje();
+							}
+
+							if(error != 2){
+								if(estado.channel == 1){
+									estado.channel = 0;
+									estado.channelname = calloc(strlen(channelname)+1, sizeof(char));
+									strcpy(estado.channelname, channelname);
+
+									c_join(estado.channelname);
+									quit = recibirMensaje();
+									printf("%i \n",quit);
+									comprobarComando();
+								}
+							}else{
+								printf("*** You must specify a channel\n");
+							}
+						}else{
+							estado.nick = 0;
+							estado.channel = 0;
+
+							free(estado.nickname);
+
+							if(estado.channel == 1)
+								printf("*** You are not authenticated in the server\n");
+						}
+					}
+				}else if(error == 1){
+					printf("*** You must specify the nickname to use\n");
+					estado.channel = 0;
+				}
+				if(estado.channel == 1){
+					estado.channel = 0;
+					printf("*** You are not authenticated in the server\n");
+				}
+            }else{
+            	/* Si no se puede conectar al servidor*/
+				fdmax = 0;
+				estado.channel = 0;
+				estado.nick = 0;
+				free(estado.servername);
+				free(estado.port);
+            }
+    }else{
+    	fdmax = 0;
+    	estado.channel = 0;
+       	estado.nick = 0;
+    	if(estado.channel == 1 || estado.nick == 1)
+    		printf("*** You are not connected to any server.\n");
+    }
+
+    if(estado.debug == 1){
+		printf("%i \n",estado.serv);
+		printf("%i \n",estado.nick);
+		printf("%i \n",estado.channel);
+    }
+	return 1;
+}
+
+void comprobarComando(){
+	 /* COMMAND AUTH*/
+		if(quit == 1){
+			estado.nick = 1;
+		/* COMMAND JOIN*/
+		}else if(quit == 332){
+			estado.channel = 1;
+		/* ERROR: SERVER DOWN */
+		}else if(quit == 432 || quit == 433){
+			if(estado.nick == 1){
+				estado.nick = 0;
+				free(estado.nickname);
+			}
+		/* OTROS ERRORES*/
+		}else if(quit == 451){
+			if(estado.channel == 1){
+				estado.channel = 0;
+				free(estado.channelname);
+			}
+		/* CANAL INEXISTENTE*/
+		}else if(quit == 474){
+			estado.channel = 0;
+			free(estado.channelname);
+		/* ERROR: SERVER DOWN */
+		}else if(quit == 504){
+			if(estado.serv == 1){
+				estado.serv = 0;
+				free(estado.servername);
+				free(estado.port);
+				FD_CLR(serverConnected, &descriptorLectura);
+				close(serverConnected);
+			}
+			if(estado.nick == 1){
+				estado.nick = 0;
+				free(estado.nickname);
+			}
+			if(estado.channel == 1){
+				estado.channel = 0;
+				free(estado.channelname);
+			}
+		/* COMMAND DISCONNECT */
+		}else if(quit == 505){
+			estado.serv = 0;
+			free(estado.servername);
+			free(estado.port);
+
+			if(estado.nick == 1){
+				estado.nick = 0;
+				free(estado.nickname);
+			}
+			if(estado.channel == 1){
+				estado.channel = 0;
+				free(estado.channelname);
+			}
+		/* COMMAND LEAVE*/
+		}else if(quit == 506){
+			/* Sin la 2a comprobacion si se escribe muy rapido 2 veces el comando peta dando un error de doble free,
+			 * en la teoria no deberia entrar pero lo hace y depurando no entra dos veces en el comando leave, pero recibe dos 451
+			 * */
+			if(estado.channel == 1){
+				estado.channel = 0;
+				free(estado.channelname);
+			}
+		}
+}
+
 int main(int argc, char *argv[]){
 		char *program_name = argv[0];
         int opt;
         int i;
         char* aux;
         char* aux2;
+        int error = 0;
 
         /* Parse command-line arguments */
-        while ((opt = getopt(argc, argv, "n:s:dc::")) != -1) {
+        while ((opt = getopt(argc, argv, "n:s:dc:")) != -1) {
 		   switch (opt) {
 				   case 'n':
 						   estado.nick = 1;
@@ -396,13 +549,18 @@ int main(int argc, char *argv[]){
 				   case '?':
 						   if (optopt == 's'){
 							   fprintf (stderr, "*** Option -%c needs a host:port.\n", optopt);
+						   }else if (optopt == 'n'){
+							 	error = 1;
+						   }else if (optopt == 'c'){
+						   	 	error = 2;
 						   }else if (isprint (optopt))
 							   fprintf (stderr, "*** Unknown option `-%c'.\n", optopt);
 						   else
-							fprintf (stderr, "Unknown option character `\\x%x'.\n", optopt);
+							   fprintf (stderr, "Unknown option character `\\x%x'.\n", optopt);
+						   break;
 				   default:
 						   usage(program_name);
-						   exit(-1);
+						   break;
 		   }
         }
 
@@ -412,49 +570,8 @@ int main(int argc, char *argv[]){
 
         FD_ZERO(&descriptorLectura);
 
-
-        if(estado.serv == 1){
-				estado.serv = c_connect(&serverConnected, &descriptorLectura, &fdmax, estado.servername, estado.port);
-                if(estado.serv == 1){
-					if(estado.nick == 1){
-						estado.nick = 0;
-						estado.nickname = calloc(strlen(aux)+1, sizeof(char));
-						strcpy(estado.nickname, aux);
-
-						c_auth(estado.nickname);
-						quit = recibirMensaje();
-
-						if(quit == 1){
-							estado.nick = 1;
-							if(estado.channel == 1){
-								estado.channel = 0;
-								estado.channelname = calloc(strlen(aux2), sizeof(char));
-								strcpy(estado.channelname, aux2);
-
-								c_join(estado.channelname);
-							}
-						}else{
-							printf("*** You are not authenticated in the server\n");
-							estado.nick = 0;
-							estado.channel = 0;
-
-							free(estado.nickname);
-						}
-					}
-					if(estado.channel == 1){
-						estado.channel = 0;
-						printf("*** You are not authenticated in the server\n");
-					}
-                }else{
-                	fdmax = 0;
-                	estado.channel = 0;
-                	estado.nick = 0;
-                }
-        }else{
-        	fdmax = 0;
-        	estado.channel = 0;
-        	estado.nick = 0;
-        }
+        /* Llama al metodo para comprobar los datos de entrada*/
+        init(aux, aux2, error);
 
         FD_SET(0, &descriptorLectura);
 
@@ -476,65 +593,8 @@ int main(int argc, char *argv[]){
 							}
                         }
                 }
-                /* COMMAND AUTH*/
-                if(quit == 1){
-                	estado.nick = 1;
-                /* COMMAND JOIN*/
-                }else if(quit == 332){
-                	estado.channel = 1;
-                /* ERROR: SERVER DOWN */
-                }else if(quit == 432 || quit == 433){
-                	if(estado.nick == 1){
-                		estado.nick = 0;
-                		free(estado.nickname);
-                	}
-               	/* OTROS ERRORES*/
-                }else if(quit == 451){
-                	if(estado.channel == 1){
-                		estado.channel = 0;
-                		free(estado.channelname);
-                	}
-                /* ERROR: SERVER DOWN */
-                }else if(quit == 504){
-                	if(estado.serv == 1){
-						estado.serv = 0;
-						free(estado.servername);
-						free(estado.port);
-						FD_CLR(serverConnected, &descriptorLectura);
-						close(serverConnected);
-                	}
-                	if(estado.nick == 1){
-                		estado.nick = 0;
-						free(estado.nickname);
-                	}
-                	if(estado.channel == 1){
-                		estado.channel = 0;
-						free(estado.channelname);
-                	}
-                /* COMMAND DISCONNECT */
-                }else if(quit == 505){
-                	estado.serv = 0;
-                	free(estado.servername);
-                	free(estado.port);
 
-                	if(estado.nick == 1){
-                		estado.nick = 0;
-                		free(estado.nickname);
-                	}
-                	if(estado.channel == 1){
-                		estado.channel = 0;
-						free(estado.channelname);
-                	}
-                /* COMMAND LEAVE*/
-                }else if(quit == 506){
-                	/* Sin la 2a comprobacion si se escribe muy rapido 2 veces el comando peta dando un error de doble free,
-                	 * en la teoria no deberia entrar pero lo hace y depurando no entra dos veces en el comando leave, pero recibe dos 451
-                	 * */
-					if(estado.channel == 1){
-						estado.channel = 0;
-						free(estado.channelname);
-					}
-                }
+                comprobarComando();
         }
 
         /* Liberar memoria */

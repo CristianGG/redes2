@@ -1,0 +1,112 @@
+valgrind -q --leak-check=full --show-reachable=yes ./ircc
+
+/connect localhost:7102
+/sleep 1
+
+/auth user1
+/sleep 1
+
+/list
+/sleep 1
+
+/join #ro2
+/sleep 1
+
+/join
+----
+valgrind -q --leak-check=full --show-reachable=yes ./ircc -s localhost:7102 -n user2
+
+/join #ro2
+/sleep 1
+
+/who
+/sleep 1
+
+/info user1
+/sleep 1
+
+hello user1
+/msg hello there!
+
+/leave
+/sleep 1
+
+/join
+
+/disconnect
+/sleep 1
+
+/quit
+
+------------------------------
+valgrind -q --leak-check=full --show-reachable=yes ./ircc
+/connect
+/sleep 1
+
+/connect localhost
+/sleep 1
+
+/connect :7777
+/sleep 1
+
+/connect localhost:6666
+/sleep 1
+
+/connect localhost 7777
+/sleep 1
+
+/connect localhost:7777
+/sleep 1
+
+/connect localhost:7102
+/sleep 60
+
+/auth user1
+/sleep 1
+
+/connect localhost:7102
+/sleep 1
+
+/disconnect
+/sleep 1
+
+/connect localhost:7102
+/sleep 1
+
+/connect localhost:7102
+/sleep 1
+
+/quit
+------------------
+valgrind -q --leak-check=full --show-reachable=yes ./ircc
+
+/auth user1
+/sleep 1
+
+/connect localhost:7102
+/sleep 1
+
+/auth
+/sleep 1
+
+/auth 0user1
+/sleep 1
+
+/auth user1234567890
+/sleep 1
+
+valgrind -q --leak-check=full --show-reachable=yes ./ircc -n user1
+
+/auth user1
+/sleep 1
+
+/auth userOK
+/sleep 1
+
+/connect localhost:7102
+/sleep 60
+
+/auth userOK
+/sleep 1
+
+/quit

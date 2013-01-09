@@ -1,8 +1,5 @@
 #include "libRedes.h"
 
-
-
-
 /* Autores:
  *
  * Alonso Luna, Miguel
@@ -79,14 +76,18 @@ int c_connect(int* serverConnected2, fd_set* descriptorLectura ,int* fdmax, char
         hints.ai_flags = AI_PASSIVE;
 
         if ((status = getaddrinfo(servername, port, &hints, &servinfo)) != 0) {
-            fprintf(stderr, "getaddrinfo error: %s\n", gai_strerror(status));
+            fprintf(stderr, "*** Unable to connect. Check your Internet connection");
+            freeaddrinfo(servinfo);
+            return 0;
         }
 
         /* Se crea el socket no bloqueante */
         *serverConnected2 = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
 
         if(*serverConnected2 < 0){
-                perror("Error creando socket");
+        	fprintf(stderr, "*** Unable to connect. Check your Internet connection");
+            freeaddrinfo(servinfo);
+        	return 0;
         }
 
         /* Comprueba si se puede conectar */
@@ -365,6 +366,14 @@ int c_leaveServer(char* cadena){
                 return 0;
 }
 
+int c_quitServer(char* cadena){
+        if(strstr(cadena, "QUIT") != NULL)
+                return 1;
+        else
+                return 0;
+}
+
+
 /* Envia al servidor los datos */
 int enviar(char* mensaje, int length) {
         int enviados;
@@ -433,11 +442,14 @@ int recibirMensaje() {
             tipo = c_pong(mensaje);
         }else if(c_joinServer(mensaje) == 1){
             tipo = c_pong(mensaje);
+        }else if(c_quitServer(mensaje) == 1){
+            tipo = c_quitMsg(mensaje);
         }else if(c_leaveServer(mensaje) == 1){
             tipo = c_leaveMsg(mensaje);
         }else if(c_error(mensaje) == 1){
         	if(quit == 0){
         		tipo = parserError(mensaje);
+        		/*Se ha dado la opción de salir y libera memoria*/
         	}else{
         		if(channel == 1){
         			channel = 0;
@@ -461,22 +473,22 @@ int recibirMensaje() {
 int imprimir(char* mensaje) {
 		char* user;
 		char* cadena;
+		char* aux;
 
-		strtok(mensaje, ":");
-		strtok(mensaje, ":");
-		user = strtok(mensaje, "!");
-		strtok(mensaje, ":");
-		cadena = strtok(mensaje, ":");
+		aux = strtok(mensaje, "!");
+		strtok(NULL, ":");
+		cadena = strtok(NULL, ":");
+		strrem(aux, &user, ":");
 		printf("<%s> %s\n", user, cadena);
 
+		free(user);
 		return 0;
 }
 
 int c_leaveMsg(char* mensaje){
 	char* name;
 	char* channel;
-
-	printf("%s \n", mensaje);
+	int codigo;
 
 	strtok(mensaje, " ");
 	strtok(NULL, " ");
@@ -485,11 +497,38 @@ int c_leaveMsg(char* mensaje){
 
 	if(strcmp(name, nickname) == 0){
 		printf("***You have left channel %s \n", channel);
-		return 506;
+		codigo = 506;
 	}else{
 		printf("*** %s has left channel %s \n", name, channel);
-		return 0;
+		codigo = 0;
 	}
+
+	return codigo;
+}
+
+int c_quitMsg(char* mensaje){
+	char* name;
+	char* cadena;
+	char* aux;
+	int codigo;
+
+	printf("%s \n", mensaje);
+
+	aux = strtok(mensaje, "!");
+	strtok(NULL, ":");
+	cadena = strtok(NULL, ":");
+	strrem(aux, &name, ":");
+
+	if(strcmp(name, nickname) == 0){
+		printf("***You left. Bye! \n");
+		codigo = 507;
+	}else{
+		printf("*** %s left, it says: %s \n", name, cadena);
+		codigo = 0;
+	}
+
+	free(name);
+	return codigo;
 }
 
 int parserError(char* mensaje) {
@@ -517,6 +556,8 @@ int parser(char* mensaje) {
         char* cadena;
         char* aux;
         int pos;
+
+        printf("%s \n",mensaje);
 
         grupo = strtok(mensaje, " ");
         if(grupo != NULL){
@@ -760,7 +801,7 @@ int strrem(char* origen, char** dest, char* substring){
         if(pos != -1){
                 aux = calloc(length-lengthsub+1, sizeof(char));
                 strncpy(aux, &origen[0],pos);                
-		strncpy(&aux[pos], &origen[pos+lengthsub],(length-lengthsub-pos));
+                strncpy(&aux[pos], &origen[pos+lengthsub],(length-lengthsub-pos));
         }else{
                 return pos;
         }

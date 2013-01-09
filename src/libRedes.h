@@ -38,6 +38,10 @@ int c_leaveServer(char* cadena);
 
 int c_leaveMsg(char* cadena);
 
+int c_quitServer(char* cadena);
+
+int c_quitMsg(char* cadena);
+
 int c_who(char* cadena);
 
 int c_info(char* cadena);
